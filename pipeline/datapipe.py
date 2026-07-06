@@ -264,6 +264,11 @@ class DataPipeline():
 
                 relation["concept_indices"] = concept_indices
 
+            if "staticflickr" in annot["url"]:
+                annot["path"] = "/Users/tejasdhopavkar/Documents/MS/Saarland_University/Semester_3/MLU/Project/data/images/flickr"
+            else:
+                annot["path"] = "/Users/tejasdhopavkar/Documents/MS/Saarland_University/Semester_3/MLU/Project/data/images/nyu"
+
 
         # Save the final dataset
         with open(storage_path, "w") as file:
