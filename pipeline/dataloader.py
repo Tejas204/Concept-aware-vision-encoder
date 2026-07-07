@@ -67,7 +67,7 @@ class SpatialSenseDataset(Dataset):
         n_concepts = len(self.concepts)
         one_hot_concept_vector = np.zeros(n_concepts)
         for idx in sample["concept_indices"]:
-            one_hot_concept_vector[int(idx)] = 1.0
+            one_hot_concept_vector[int(idx)] = 1
 
         # Transform the vector to tensor
         concept_tensor = torch.from_numpy(one_hot_concept_vector)
@@ -97,30 +97,3 @@ class SpatialSenseDataset(Dataset):
 
         loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
         return loader
-
-
-train_dataset = SpatialSenseDataset(
-    json_path,
-    image_root,
-    processor,
-    split="train"
-)
-
-test_dataset = SpatialSenseDataset(
-    json_path,
-    image_root,
-    processor,
-    split="test"
-)
-
-train_loader = DataLoader(
-    train_dataset,
-    batch_size=32,
-    shuffle=True
-)
-
-test_loader = DataLoader(
-    test_dataset,
-    batch_size=32,
-    shuffle=False
-)
