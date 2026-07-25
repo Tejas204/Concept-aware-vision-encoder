@@ -23,7 +23,7 @@ conda activate mlu
 cd "$HOME/Concept-aware-vision-encoder"
 
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install --upgrade -r requirements.txt
 
 python - <<EOF
 import torch
