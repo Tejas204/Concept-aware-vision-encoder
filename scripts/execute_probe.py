@@ -15,7 +15,10 @@ if __name__ == "__main__":
 
     # -----------------------------------------------------------------------------------
     # define storage filepath:
-    storage_path = ""
+    image_storage_path = "visualizations/dataset"
+    result_storage_path = "results/linear_probe_metrics"
+    checkpoint_path = "checkpoints"
+    model = "/scratch/common_models/llava-onevision-qwen2-7b-si-hf"
 
     # -----------------------------------------------------------------------------------
     # define transform
@@ -26,61 +29,72 @@ if __name__ == "__main__":
     training_data = dataloader.SpatialSenseDataset(
         data_path="data/metadata/concept_metadata.json",
         concept_path="data/metadata/concepts.json",
+        object_path="data/metadata/objects.json",
+        predicate_path="data/metadata/predicates.json",
+        probe_type="concepts",
         transform=transform,
         split="train"
     )
     train_loader = training_data.data_loaders(split="train", batch_size=4)
+
     for i in range(5):
-        training_data.visualize_images(storage_path=f"visualizations/dataset/training_data_{i+1}.png")
+        training_data.visualize_images(storage_path=f"{image_storage_path}/training_data_{i+1}.png")
 
     # -----------------------------------------------------------------------------------
     # Get validation data loader
     validation_data = dataloader.SpatialSenseDataset(
         data_path="data/metadata/concept_metadata.json",
         concept_path="data/metadata/concepts.json",
+        object_path="data/metadata/objects.json",
+        predicate_path="data/metadata/predicates.json",
+        probe_type="concepts",
         transform=transform,
         split="valid"
     )
-    valudation_loader = validation_data.data_loaders(split="valid", batch_size=4)
+    validation_loader = validation_data.data_loaders(split="valid", batch_size=4)
     for i in range(5):
-        training_data.visualize_images(storage_path=f"visualizations/dataset/validation_data_{i+1}.png")
+        training_data.visualize_images(storage_path=f"{image_storage_path}/validation_data_{i+1}.png")
 
     # -----------------------------------------------------------------------------------
     # Get testing data loader
     testing_data = dataloader.SpatialSenseDataset(
         data_path="data/metadata/concept_metadata.json",
         concept_path="data/metadata/concepts.json",
+        object_path="data/metadata/objects.json",
+        predicate_path="data/metadata/predicates.json",
+        probe_type="concepts",
         transform=transform,
         split="test"
     )
     test_loader = testing_data.data_loaders(split="test", batch_size=4)
+
     for i in range(5):
-        testing_data.visualize_images(storage_path=f"visualizations/dataset/testing_data_{i+1}.png")
+        testing_data.visualize_images(storage_path=f"{image_storage_path}/testing_data_{i+1}.png")
 
     # -----------------------------------------------------------------------------------
-    # Create object of the probe
-    probe = probing.LlavaOneVisionProbe(activation=Softmax,
-                                        num_classes=10240,
-                                        model="",
-                                        num_epochs=10,
-                                        criterion=torch.nn.BCEWithLogitsLoss(),
-                                        train_loader=train_loader,
-                                        test_loader=test_loader)
+    # Create object of the probe, train, validate and test
+    probe = probing.LlavaOneVisionProbe(
+            activation=Softmax,
+            num_classes=10240,
+            model=model,
+            num_epochs=100,
+            criterion=torch.nn.BCEWithLogitsLoss,
+            train_loader=train_loader,
+            val_loader=validation_loader,
+            test_loader=test_loader,
+        )
 
-    # -----------------------------------------------------------------------------------
-    # Train and test the probe.
-    probe.train(optimizer=torch.optim.Adam(probe.probe.parameters(), lr=0.01))
+    results, best_lr = probe.hyperparameter_search(
+        learning_rates=[1e-2, 3e-3, 1e-3, 3e-4],
+        save_path=f"{checkpoint_path}/llava_probe_concept.pt",
+    )
 
-    # -----------------------------------------------------------------------------------
-    # Save weights
-    torch.save(probe.state_dict(), 'model_weights.pth')
+    metrics = probe.evaluate(probe.test_loader)
 
-    # -----------------------------------------------------------------------------------
-    # Test
-    metrics = probe.evaluate()
+    print(metrics)
 
     # -----------------------------------------------------------------------------------
     # Save the results in the file
-    with open("", "w") as metfile:
+    with open(f"{results}/concept_metric.json", "w") as metfile:
         json.dump(metrics, metfile, indent=4)
 
