@@ -12,7 +12,7 @@ from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration
 class LlavaOneVisionProbe(nn.Module):
     def __init__(self, num_layers, activation, num_classes, model, num_epochs, criterion, optimizer, train_loader, test_loader, learning_rate):
         super().__init__()
-        self.num_layers = num_layers
+        # self.num_layers = num_layers
         self.activation = activation
         self.num_classes = num_classes
         self.model = model
@@ -34,7 +34,7 @@ class LlavaOneVisionProbe(nn.Module):
 
         self.probe = nn.Sequential(
             nn.Linear(self.vision.config_size, self.num_classes),
-            nn.Softmax()
+            self.activation()
         )
         
     
@@ -70,7 +70,7 @@ class LlavaOneVisionProbe(nn.Module):
         print("-"*50)
         print("\nFInished training")
 
-    def evaluate(self, return_confusion=False):
+    def evaluate(self, return_confusion_matrix=False):
         """Evaluate the trained probe on `self.test_loader`.
 
         Returns:
@@ -84,7 +84,7 @@ class LlavaOneVisionProbe(nn.Module):
 
         # prepare confusion matrix if requested
         num_classes = self.num_classes
-        if return_confusion:
+        if return_confusion_matrix:
             confusion = np.zeros((num_classes, num_classes), dtype=int)
 
         with torch.no_grad():
@@ -112,7 +112,7 @@ class LlavaOneVisionProbe(nn.Module):
                     loss = self.criterion(logits, labels)
                     total_loss += loss.item() * batch_size
 
-                if return_confusion:
+                if return_confusion_matrix:
                     for t, p in zip(labels.view(-1).cpu().numpy(), preds.view(-1).cpu().numpy()):
                         confusion[int(t), int(p)] += 1
 
@@ -121,7 +121,7 @@ class LlavaOneVisionProbe(nn.Module):
         if self.criterion is not None:
             metrics["loss"] = total_loss / total if total > 0 else 0.0
 
-        if return_confusion:
+        if return_confusion_matrix:
             return metrics, confusion
 
         return metrics

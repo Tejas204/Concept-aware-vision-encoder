@@ -9,18 +9,35 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 
 class SpatialSenseDataset(Dataset):
-    def __init__(self, data_path, concept_path, split, transform = None):
+    def __init__(self, data_path, concept_path, object_path, predicate_path, split, probe_type,transform = None):
         self.data_path = data_path
         self.concept_path = concept_path
+        self.object_path = object_path
+        self.predicate_path = predicate_path
         self.transform = transform
         self.split = split
+        self.probe_type = probe_type
 
         # Open the json file
         with open(self.data_path, "r") as file:
             self.data = json.load(file)
 
-        with open(self.concept_path, "r") as file:
-            self.concepts = json.load(file)
+        with open(self.concept_path, "r") as cfile:
+            self.concepts = json.load(cfile)
+
+        with open(self.object_path, "r") as ofile:
+            self.objects = json.load(ofile)
+
+        with open(self.predicate_path, "r") as pfile:
+            self.predicates = json.load(pfile)
+
+        # Create a dictionary of number of entities for each probe type
+        entity_dict = {
+            "concepts": len(self.concepts),
+            "objects": len(self.objects),
+            "predicates": len(self.predicates)
+        }
+
 
         # Flatten the samples for a given split
         self.samples = []
@@ -29,19 +46,20 @@ class SpatialSenseDataset(Dataset):
             if entry["split"] != self.split:
                 continue
 
-            annotations = entry["annotations"]
-            for ann in annotations:
-                self.samples.append({
-                    "img_id": img_id,
-                    "url": entry["url"],
-                    "predicate": ann["predicate"],
-                    "subject": ann["subject"],
-                    "object": ann["object"],
-                    "label": ann["label"],
-                    "caption": ann["caption"],
-                    "concept_indices": ann["concept_indices"],
-                    "path": entry["path"]
-                })
+            # Construct binary concept vector, depending on probe type:
+            # 1. Probing for objects only: cat, dog, table
+            # 2. Probing for positional predicates only: on, under.
+            # 3. Probing for compositional concepts: cat_on_table
+            concept_vector = np.zeros(entity_dict[self.probe_type], dtype=int)
+            for idx in entry["concept_indices"]:
+                concept_vector[idx] = 1
+
+            self.samples.append({
+                "img_id": img_id,
+                "url": entry['url'],
+                "concept_vector": torch.from_numpy(concept_vector),
+                "path": entry["path"]
+            })
 
 
     def __len__(self):
@@ -65,19 +83,10 @@ class SpatialSenseDataset(Dataset):
         
         image = Image.open(image_path).convert("RGB")
 
-        # Generate the concept one-hot vector
-        n_concepts = len(self.concepts)
-        one_hot_concept_vector = np.zeros(n_concepts)
-        for idx in sample["concept_indices"]:
-            one_hot_concept_vector[int(idx)] = 1
-
-        # Transform the vector to tensor
-        concept_tensor = torch.from_numpy(one_hot_concept_vector)
-
         if self.transform:
             image = self.transform(image)
 
-        return {"image": image, "concept": concept_tensor, "caption": sample.get("caption", "")}
+        return {"image": image, "concept_vector": sample["concept_vector"], "caption": sample.get("caption", "")}
 
     
 
@@ -154,5 +163,3 @@ class SpatialSenseDataset(Dataset):
             if directory:
                 os.makedirs(directory, exist_ok=True)
             plt.savefig(storage_path, bbox_inches="tight")
-
-        plt.show()

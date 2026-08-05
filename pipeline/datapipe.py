@@ -180,6 +180,8 @@ class DataPipeline():
         --------------------------------------------------------------------------------------------
         """
         unique_concepts = set()
+        unique_predicates = set()
+        unique_objects = set()
 
         # Find all unique concepts
         for _, annot in self.filtered_annotations.items():
@@ -187,17 +189,38 @@ class DataPipeline():
                 # Positive concept - presence of concept
                 if relation["label"]:
                     concept = relation["subject"]["name"] + "_" + relation["predicate"] + "_" + relation["object"]["name"]
+                    predicate = relation["predicate"]
                 # Negative concept - absence of concept
                 else:
                     concept = relation["subject"]["name"] + "_not_" + relation["predicate"] + "_" + relation["object"]["name"]
+                    predicate = "not_" + relation["predicate"]
+
+                # Store concepts, objects and predicates
                 unique_concepts.add(concept)
+                unique_predicates.add(predicate)
+                unique_objects.add(relation["subject"]["name"])
+                unique_objects.add(relation["object"]["name"])
 
         # Store concept vector
-        self.unique_concept_list = list(unique_concepts)
-        with open(storage_path, "w") as file:
+        self.unique_concept_list = sorted(list(unique_concepts))
+        self.unique_object_list = sorted(list(unique_objects))
+        self.unique_predicate_list = sorted(list(unique_predicates))
+
+        final_concept_path = storage_path + "/concepts.json"
+        with open(final_concept_path, "w") as file:
             json.dump(self.unique_concept_list, file, indent=4)
 
-        return self.unique_concept_list
+        final_object_path = storage_path + "/objects.json"
+        with open(final_object_path, "w") as file:
+            json.dump(self.unique_object_list, file, indent=4)
+
+        final_predicate_path = storage_path + "/predicates.json"
+        with open(final_predicate_path, "w") as file:
+            json.dump(self.unique_predicate_list, file, indent=4)
+
+
+        return self.unique_concept_list, self.unique_object_list, self.unique_predicate_list
+
     
 
     def build_caption(self, storage_path: str):
@@ -231,7 +254,7 @@ class DataPipeline():
             json.dump(self.filtered_annotations, file, indent=4)
 
 
-    def build_concept_vector(self, unique_concepts: list, storage_path: str):
+    def build_concept_vector(self, unique_concepts: list, unique_objects: list, unique_predicates: list, storage_path: str):
         """
         --------------------------------------------------------------------------------------------
         Build a concept vector for each relation in the filtered annotations.
@@ -248,21 +271,40 @@ class DataPipeline():
         --------------------------------------------------------------------------------------------
         """
         for _, annot in self.filtered_annotations.items():
-            for relation in annot["annotations"]:
-                # Store only concept indices for a relation, dense vector generated at run-time
-                concept_indices = []
+            # Store only concept indices per image. At run-time, we construct a binary concept vector
+            concept_indices = []
+            predicate_indices = []
+            object_indices = []
 
+            for relation in annot["annotations"]:
                 # Build individual concepts
                 if relation["label"]:
                     concept = relation["subject"]["name"] + "_" + relation["predicate"] + "_" + relation["object"]["name"]
+                    predicate = relation["predicate"]
                 else:
                     concept = relation["subject"]["name"] + "_not_" + relation["predicate"] + "_" + relation["object"]["name"]
+                    predicate = "not_" + relation["predicate"]
                 
                 if concept in unique_concepts:
-                    # Find the index of concept and mark it as 1
+                    # Find the index of concept and append it
                     concept_indices.append(unique_concepts.index(concept))
 
-                relation["concept_indices"] = concept_indices
+                if relation["predicate"] in unique_predicates:
+                    # Find the index of predicate and append it
+                    predicate_indices.append(unique_predicates.index(predicate))
+
+                if relation["subject"]["name"] in unique_objects:
+                    # Find the index of subject and append it
+                    object_indices.append(unique_objects.index(relation["subject"]["name"]))
+
+                if relation["object"]["name"] in unique_objects:
+                    # Find the index of object and append it
+                    object_indices.append(unique_objects.index(relation["object"]["name"]))
+
+            # Store concepts
+            annot["concept_indices"] = concept_indices
+            annot["predicate_indices"] = predicate_indices
+            annot["object_indices"] = object_indices
 
             if "staticflickr" in annot["url"]:
                 annot["path"] = "/Users/tejasdhopavkar/Documents/MS/Saarland_University/Semester_3/MLU/Project/data/images/flickr"
