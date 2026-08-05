@@ -9,7 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 
 class SpatialSenseDataset(Dataset):
-    def __init__(self, data_path, concept_path, object_path, predicate_path, split, probe_type,transform = None):
+    def __init__(self, data_path, concept_path, object_path, predicate_path, split, probe_type, transform = None):
         self.data_path = data_path
         self.concept_path = concept_path
         self.object_path = object_path

@@ -10,18 +10,15 @@ from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration
 
 
 class LlavaOneVisionProbe(nn.Module):
-    def __init__(self, num_layers, activation, num_classes, model, num_epochs, criterion, optimizer, train_loader, test_loader, learning_rate):
+    def __init__(self, activation, num_classes, model, num_epochs, criterion, train_loader, test_loader):
         super().__init__()
-        # self.num_layers = num_layers
         self.activation = activation
         self.num_classes = num_classes
         self.model = model
         self.num_epochs = num_epochs
         self.criterion = criterion
-        self.optimizer = optimizer
         self.train_loader = train_loader
         self.test_loader = test_loader
-        self.learning_rate = learning_rate
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Beginning probe for: {model}")
 
@@ -38,7 +35,7 @@ class LlavaOneVisionProbe(nn.Module):
         )
         
     
-    def train(self):
+    def train(self, optimizer):
 
         # Train the probe over epochs
         for epoch in range(self.num_epochs):
@@ -59,9 +56,9 @@ class LlavaOneVisionProbe(nn.Module):
                 logits = self.probe(feats)
                 loss = self.criterion(logits, labels)
 
-                self.optimizer.zero_grad()
+                optimizer.zero_grad()
                 loss.backward()
-                self.optimizer.step()
+                optimizer.step()
 
                 if (batch + 1) % 100 == 0:
                     print(f"Epoch: {epoch+1} / {self.epochs}, step {batch+1}/{self.n_total_steps}, loss = {loss.item():.4f}")
@@ -69,6 +66,10 @@ class LlavaOneVisionProbe(nn.Module):
         
         print("-"*50)
         print("\nFInished training")
+
+    def validate(self, epochs, learning_rates):
+        # TODO implement validation on the dataset
+        pass
 
     def evaluate(self, return_confusion_matrix=False):
         """Evaluate the trained probe on `self.test_loader`.
