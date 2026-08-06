@@ -2,6 +2,7 @@ import sys
 import os
 import json
 import torch
+from pathlib import Path
 from torch.nn import Softmax
 import torchvision.transforms as transforms
 
@@ -99,6 +100,9 @@ if __name__ == "__main__":
 
     # -----------------------------------------------------------------------------------
     # Save the results in the file
-    with open(f"{results}/{probe_type}_metric.json", "w") as metfile:
+    result_dir = Path(CONFIG[type]["result_storage_path"])
+    result_dir.mkdir(parents=True, exist_ok=True)
+
+    with open(result_dir / f"{probe_type}_metric.json", "w") as metfile:
         json.dump(metrics, metfile, indent=4)
 
