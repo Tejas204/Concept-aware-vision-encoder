@@ -283,7 +283,7 @@ class LinearProbe(nn.Module):
 
 
         # Extract the vision tower and set to eval
-        self.model = LlavaOnevisionForConditionalGeneration(model, torch_dtype = torch.float16, device_map = "auto")
+        self.model = LlavaOnevisionForConditionalGeneration.from_pretrained(model, torch_dtype = torch.float16, device_map = "auto")
         self.vision = model.model.vision_tower
         self.vision.eval()
         self.vision.requires_grad(False)
