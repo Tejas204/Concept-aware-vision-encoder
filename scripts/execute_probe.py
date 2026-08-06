@@ -78,7 +78,7 @@ if __name__ == "__main__":
 
     # -----------------------------------------------------------------------------------
     # Create object of the probe, train, validate and test
-    probe = probing.LlavaOneVisionProbe(
+    probe = probing.LinearProbe(
             activation=CONFIG[type]["activation"],
             num_classes=CONFIG[type]["num_classes"],
             model=model,
