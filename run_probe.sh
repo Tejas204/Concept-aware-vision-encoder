@@ -23,4 +23,6 @@ PY
 
 python -u execute_probe.py
 
-echo "Finished: $(date)"
+echo "=========================================="
+echo "Finished Running probe: $(date)"
+echo "=========================================="

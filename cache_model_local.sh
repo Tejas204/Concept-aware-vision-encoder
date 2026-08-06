@@ -14,4 +14,6 @@ echo "Started: $(date)"
 
 python -u utils/cache_model_local.py
 
-echo "Finished: $(date)"
+echo "=========================================="
+echo "Finished downloading model: $(date)"
+echo "=========================================="
