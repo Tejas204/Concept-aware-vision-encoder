@@ -17,7 +17,7 @@ CONFIG = {
         "activation":torch.nn.Sigmoid,
         "num_classes":14094,
         "num_epochs":100,
-        "criterion":torch.nn.BCEWithLogitsLoss
+        "criterion":torch.nn.BCEWithLogitsLoss()
     },
     "predicate": {
         "image_storage_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/dataset",
@@ -32,7 +32,7 @@ CONFIG = {
         "activation":torch.nn.Sigmoid,
         "num_classes":18,
         "num_epochs":100,
-        "criterion":torch.nn.BCEWithLogitsLoss
+        "criterion":torch.nn.BCEWithLogitsLoss()
     },
     "object": {
         "image_storage_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/dataset",
@@ -47,6 +47,6 @@ CONFIG = {
         "activation":torch.nn.Sigmoid,
         "num_classes":3679,
         "num_epochs":100,
-        "criterion":torch.nn.BCEWithLogitsLoss
+        "criterion":torch.nn.BCEWithLogitsLoss()
     }
 }
