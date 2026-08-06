@@ -22,7 +22,7 @@ if __name__ == "__main__":
     result_storage_path = CONFIG[type]["result_storage_path"]
     checkpoint_path = CONFIG[type]["checkpoint_path"]
     model = CONFIG[type]["model"]
-    probe_type = CONFIG[type]["probetype"]
+    probe_type = CONFIG[type]["probe_type"]
 
     # -----------------------------------------------------------------------------------
     # define transform
