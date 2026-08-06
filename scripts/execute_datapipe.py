@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
     datapipe_object.annotations_to_dictionary()
     datapipe_object.run_basic_analysis()
-    datapipe_object.filter_samples(remove_all_false_annotations=True, storage_path="/Users/tejasdhopavkar/Documents/MS/Saarland_University/Semester_3/MLU/Project/data/metadata/filtered_metadata.json")
+    datapipe_object.filter_samples(remove_all_false_annotations=False, storage_path="/Users/tejasdhopavkar/Documents/MS/Saarland_University/Semester_3/MLU/Project/data/metadata/filtered_metadata.json")
     unique_concepts, unique_objects, unique_predicates = datapipe_object.extract_concepts(storage_path="/Users/tejasdhopavkar/Documents/MS/Saarland_University/Semester_3/MLU/Project/data/metadata")
     datapipe_object.build_caption(storage_path="/Users/tejasdhopavkar/Documents/MS/Saarland_University/Semester_3/MLU/Project/data/metadata/captioned_metadata.json")
     datapipe_object.build_concept_vector(unique_concepts=unique_concepts, unique_objects=unique_objects, unique_predicates=unique_predicates, storage_path="/Users/tejasdhopavkar/Documents/MS/Saarland_University/Semester_3/MLU/Project/data/metadata/concept_metadata.json")

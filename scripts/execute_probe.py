@@ -10,15 +10,19 @@ sys.path.append(os.path.dirname(SCRIPT_DIR))
 
 from pipeline import dataloader
 from experiments import probing
+from config.probe_config import CONFIG
  
 if __name__ == "__main__":
 
     # -----------------------------------------------------------------------------------
-    # define storage filepath:
-    image_storage_path = "visualizations/dataset"
-    result_storage_path = "results/linear_probe_metrics"
-    checkpoint_path = "checkpoints"
-    model = "/scratch/common_models/llava-onevision-qwen2-7b-si-hf"
+    type = "concept"
+
+    # define static variables:
+    image_storage_path = CONFIG[type]["image_storage_path"]
+    result_storage_path = CONFIG[type]["result_storage_path"]
+    checkpoint_path = CONFIG[type]["checkpoint_path"]
+    model = CONFIG[type]["model"]
+    probe_type = CONFIG[type]["probetype"]
 
     # -----------------------------------------------------------------------------------
     # define transform
@@ -27,11 +31,11 @@ if __name__ == "__main__":
     # -----------------------------------------------------------------------------------
     # Get training data loader
     training_data = dataloader.SpatialSenseDataset(
-        data_path="data/metadata/concept_metadata.json",
-        concept_path="data/metadata/concepts.json",
-        object_path="data/metadata/objects.json",
-        predicate_path="data/metadata/predicates.json",
-        probe_type="concepts",
+        data_path=CONFIG[type]["data_path"],
+        concept_path=CONFIG[type]["concept_path"],
+        object_path=CONFIG[type]["object_path"],
+        predicate_path=CONFIG[type]["predicate_path"],
+        probe_type=probe_type,
         transform=transform,
         split="train"
     )
@@ -43,11 +47,11 @@ if __name__ == "__main__":
     # -----------------------------------------------------------------------------------
     # Get validation data loader
     validation_data = dataloader.SpatialSenseDataset(
-        data_path="data/metadata/concept_metadata.json",
-        concept_path="data/metadata/concepts.json",
-        object_path="data/metadata/objects.json",
-        predicate_path="data/metadata/predicates.json",
-        probe_type="concepts",
+        data_path=CONFIG[type]["data_path"],
+        concept_path=CONFIG[type]["concept_path"],
+        object_path=CONFIG[type]["object_path"],
+        predicate_path=CONFIG[type]["predicate_path"],
+        probe_type=probe_type,
         transform=transform,
         split="valid"
     )
@@ -58,11 +62,11 @@ if __name__ == "__main__":
     # -----------------------------------------------------------------------------------
     # Get testing data loader
     testing_data = dataloader.SpatialSenseDataset(
-        data_path="data/metadata/concept_metadata.json",
-        concept_path="data/metadata/concepts.json",
-        object_path="data/metadata/objects.json",
-        predicate_path="data/metadata/predicates.json",
-        probe_type="concepts",
+        data_path=CONFIG[type]["data_path"],
+        concept_path=CONFIG[type]["concept_path"],
+        object_path=CONFIG[type]["object_path"],
+        predicate_path=CONFIG[type]["predicate_path"],
+        probe_type=probe_type,
         transform=transform,
         split="test"
     )
@@ -74,11 +78,11 @@ if __name__ == "__main__":
     # -----------------------------------------------------------------------------------
     # Create object of the probe, train, validate and test
     probe = probing.LlavaOneVisionProbe(
-            activation=Softmax,
-            num_classes=10240,
+            activation=CONFIG[type]["activation"],
+            num_classes=CONFIG[type]["num_classes"],
             model=model,
-            num_epochs=100,
-            criterion=torch.nn.BCEWithLogitsLoss,
+            num_epochs=CONFIG[type]["num_epochs"],
+            criterion=CONFIG[type]["criterion"],
             train_loader=train_loader,
             val_loader=validation_loader,
             test_loader=test_loader,
@@ -86,7 +90,7 @@ if __name__ == "__main__":
 
     results, best_lr = probe.hyperparameter_search(
         learning_rates=[1e-2, 3e-3, 1e-3, 3e-4],
-        save_path=f"{checkpoint_path}/llava_probe_concept.pt",
+        save_path=f"{checkpoint_path}/llava_probe_{probe_type}.pt",
     )
 
     metrics = probe.evaluate(probe.test_loader)
@@ -95,6 +99,6 @@ if __name__ == "__main__":
 
     # -----------------------------------------------------------------------------------
     # Save the results in the file
-    with open(f"{results}/concept_metric.json", "w") as metfile:
+    with open(f"{results}/{probe_type}_metric.json", "w") as metfile:
         json.dump(metrics, metfile, indent=4)
 
