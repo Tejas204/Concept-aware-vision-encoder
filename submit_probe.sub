@@ -1,10 +1,10 @@
 universe = vanilla
 
-initialdir = /nethome/tadhopavkar/Concept-aware-vision-encoder/logs
+initialdir = /nethome/tadhopavkar/Concept-aware-vision-encoder/
 executable = run_probe.sh
-output = /nethome/tadhopavkar/Concept-aware-vision-encoder/logs/probe_$(ClusterId)_$(ProcId).$(Year)_$(Month)_$(Day)_$(SUBMIT_TIME).out
-error  = /nethome/tadhopavkar/Concept-aware-vision-encoder/logs/probe_$(ClusterId)_$(ProcId)$(Year)_$(Month)_$(Day)_$(SUBMIT_TIME).err
-log    = /nethome/tadhopavkar/Concept-aware-vision-encoder/logs/probe_$(ClusterId)$(Year)_$(Month)_$(Day)_$(SUBMIT_TIME).log
+output = /nethome/tadhopavkar/Concept-aware-vision-encoder/logs/probe/probe_$(ClusterId)_$(ProcId).$(Year)_$(Month)_$(Day)_$(SUBMIT_TIME).out
+error  = /nethome/tadhopavkar/Concept-aware-vision-encoder/logs/probe/probe_$(ClusterId)_$(ProcId)$(Year)_$(Month)_$(Day)_$(SUBMIT_TIME).err
+log    = /nethome/tadhopavkar/Concept-aware-vision-encoder/logs/probe/probe_$(ClusterId)$(Year)_$(Month)_$(Day)_$(SUBMIT_TIME).log
 
 request_cpus   = 8
 request_memory = 32GB
