@@ -125,8 +125,8 @@ class DataPipeline():
         print(f"\nImages with no annotaions: {len(no_annot_samples)}")
 
         # Find samples where all predicates are false
+        all_false_predicates = []
         if remove_all_false_annotations:
-            all_false_predicates = []
             for sample_id, annot in self.annotations.items():
                 all_false_flag = True
                 for item in annot["annotations"]:
@@ -218,6 +218,7 @@ class DataPipeline():
         with open(final_predicate_path, "w") as file:
             json.dump(self.unique_predicate_list, file, indent=4)
 
+        print(f"\nUnique concepts: {len(self.unique_concept_list)}, unique objects: {len(self.unique_object_list)}, unique predicates: {len(self.unique_predicate_list)}")
 
         return self.unique_concept_list, self.unique_object_list, self.unique_predicate_list
 
@@ -301,15 +302,15 @@ class DataPipeline():
                     # Find the index of object and append it
                     object_indices.append(unique_objects.index(relation["object"]["name"]))
 
-            # Store concepts
+            # Store concepts, predicates and objects
             annot["concept_indices"] = concept_indices
             annot["predicate_indices"] = predicate_indices
             annot["object_indices"] = object_indices
 
             if "staticflickr" in annot["url"]:
-                annot["path"] = "/Users/tejasdhopavkar/Documents/MS/Saarland_University/Semester_3/MLU/Project/data/images/flickr"
+                annot["path"] = "/nethome/tadhopavkar/datasets/flickr"
             else:
-                annot["path"] = "/Users/tejasdhopavkar/Documents/MS/Saarland_University/Semester_3/MLU/Project/data/images/nyu"
+                annot["path"] = "/nethome/tadhopavkar/datasets/nyu"
 
 
         # Save the final dataset
