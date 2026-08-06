@@ -33,7 +33,7 @@ class SpatialSenseDataset(Dataset):
 
         # Create a dictionary of number of entities for each probe type
         entity_dict = {
-            "concepts": len(self.concepts),
+            "concept": len(self.concepts),
             "objects": len(self.objects),
             "predicates": len(self.predicates)
         }
