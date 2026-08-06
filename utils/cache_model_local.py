@@ -7,7 +7,7 @@ from huggingface_hub import snapshot_download
 MODEL_ID = "llava-hf/llava-onevision-qwen2-7b-si-hf"
 
 # Destination directory
-DEST_DIR = Path("models") / "llava-onevision-qwen2-7b-si-hf"
+DEST_DIR = Path("/Users/tejasdhopavkar/Documents/MS/Saarland_University/Semester_3/MLU/Project/models") / "llava-onevision-qwen2-7b-si-hf"
 
 DEST_DIR.parent.mkdir(parents=True, exist_ok=True)
 
