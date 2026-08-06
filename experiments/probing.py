@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import torch.functional as functional
 import torch.nn as nn
 import copy
+import huggingface_hub
 from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration
 
 
