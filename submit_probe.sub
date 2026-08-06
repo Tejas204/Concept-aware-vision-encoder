@@ -6,8 +6,8 @@ output = /nethome/tadhopavkar/Concept-aware-vision-encoder/logs/probe/probe_$(Cl
 error  = /nethome/tadhopavkar/Concept-aware-vision-encoder/logs/probe/probe_$(ClusterId)_$(ProcId)$(Year)_$(Month)_$(Day)_$(SUBMIT_TIME).err
 log    = /nethome/tadhopavkar/Concept-aware-vision-encoder/logs/probe/probe_$(ClusterId)$(Year)_$(Month)_$(Day)_$(SUBMIT_TIME).log
 
-request_cpus   = 8
-request_memory = 32GB
+request_cpus   = 4
+request_memory = 16GB
 request_gpus   = 1
 
 # Usually appropriate when the project and environment are on shared storage
