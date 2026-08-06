@@ -34,7 +34,7 @@ CONFIG = {
         "num_epochs":100,
         "criterion":torch.nn.BCEWithLogitsLoss
     },
-    "concept": {
+    "object": {
         "image_storage_path": "visualizations/dataset",
         "result_storage_path": "results/linear_probe_metrics",
         "checkpoint_path": "checkpoints",
