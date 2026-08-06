@@ -1,10 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 
-# Optional: activate your virtual environment
-# source /path/to/venv/bin/activate
+source "$HOME/miniconda3/etc/profile.d/conda.sh"
+conda activate mlu
 
-# Optional: use your Hugging Face token if not logged in
-# export HF_TOKEN=your_huggingface_token
+cd "$HOME/Concept-aware-vision-encoder"
 
-python3 utils/cache_model_local.py
+# Set HF_TOKEN before running if the model requires authentication:
+# export HF_TOKEN="your_token"
+
+echo "Caching model on: $(hostname)"
+echo "Started: $(date)"
+
+python -u utils/cache_model_local.py
+
+echo "Finished: $(date)"
