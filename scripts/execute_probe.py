@@ -27,7 +27,7 @@ if __name__ == "__main__":
 
     # -----------------------------------------------------------------------------------
     # define transform
-    transform = transforms.Compose([transforms.ToTensor()])
+    transform = transforms.Compose([transforms.Resize((384, 384)), transforms.ToTensor()])
 
     # -----------------------------------------------------------------------------------
     # Get training data loader
@@ -79,7 +79,6 @@ if __name__ == "__main__":
     # -----------------------------------------------------------------------------------
     # Create object of the probe, train, validate and test
     probe = probing.LinearProbe(
-            activation=CONFIG[type]["activation"],
             num_classes=CONFIG[type]["num_classes"],
             model=model,
             num_epochs=CONFIG[type]["num_epochs"],

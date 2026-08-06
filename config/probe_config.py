@@ -14,7 +14,7 @@ CONFIG = {
         "concept_path":"/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/concepts.json",
         "object_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/objects.json",
         "predicate_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/predicates.json",
-        "activation":torch.nn.Softmax,
+        "activation":torch.nn.Sigmoid,
         "num_classes":14094,
         "num_epochs":100,
         "criterion":torch.nn.BCEWithLogitsLoss
@@ -29,7 +29,7 @@ CONFIG = {
         "concept_path":"/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/concepts.json",
         "object_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/objects.json",
         "predicate_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/predicates.json",
-        "activation":torch.nn.Softmax,
+        "activation":torch.nn.Sigmoid,
         "num_classes":18,
         "num_epochs":100,
         "criterion":torch.nn.BCEWithLogitsLoss
@@ -44,7 +44,7 @@ CONFIG = {
         "concept_path":"/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/concepts.json",
         "object_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/objects.json",
         "predicate_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/predicates.json",
-        "activation":torch.nn.Softmax,
+        "activation":torch.nn.Sigmoid,
         "num_classes":3679,
         "num_epochs":100,
         "criterion":torch.nn.BCEWithLogitsLoss

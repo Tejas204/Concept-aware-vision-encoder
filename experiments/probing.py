@@ -9,13 +9,13 @@ import torch.nn as nn
 import copy
 import huggingface_hub
 from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration
+from sklearn.metrics import (f1_score, precision_score, recall_score,)
 
 
 
 class LinearProbe(nn.Module):
-    def __init__(self, activation, num_classes, model, num_epochs, criterion, train_loader, test_loader, val_loader):
+    def __init__(self, num_classes, model, num_epochs, criterion, train_loader, test_loader, val_loader):
         super().__init__()
-        self.activation = activation
         self.num_classes = num_classes
         self.model_name = model
         self.num_epochs = num_epochs
@@ -23,22 +23,33 @@ class LinearProbe(nn.Module):
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.val_loader = val_loader
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
         print(f"Beginning probe for: {model}")
 
 
         # Extract the vision tower and set to eval
-        self.model = LlavaOnevisionForConditionalGeneration.from_pretrained(model, torch_dtype=torch.float16, device_map="auto",)
+        kwargs = {"torch_dtype": torch.float16}
+
+        if self.device == "cuda":
+            kwargs["device_map"] = "auto"
+
+        self.model = LlavaOnevisionForConditionalGeneration.from_pretrained(model, **kwargs)
+
+        if self.device != "cuda":
+            self.model.to(self.device)
+
         self.vision = self.model.model.vision_tower
+        print(self.vision.config)
         self.vision.eval()
+
         for p in self.vision.parameters():
             p.requires_grad = False
 
         hidden_size = self.vision.config.hidden_size
         self.probe = nn.Sequential(
             nn.Linear(hidden_size, self.num_classes),
-            self.activation(),
         )
+        self.probe.to(self.device)
         
     def fit(self, optimizer, patience=5, plot_path=None):
         best_val_loss = float("inf")
@@ -58,8 +69,8 @@ class LinearProbe(nn.Module):
             running_train_loss = 0.0
 
             for batch in self.train_loader:
-                images = batch["images"].to(self.device)
-                labels = batch["labels"].to(self.device)
+                images = batch["image"].to(self.device)
+                labels = batch["concept_vector"].float().to(self.device)
 
                 with torch.no_grad():
                     outputs = self.vision(
@@ -67,9 +78,9 @@ class LinearProbe(nn.Module):
                         output_hidden_states=True,
                         return_dict=True,
                     )
-                    feats = outputs.pooler_output
+                    feats = outputs.last_hidden_state[:, 0]
 
-                feats = feats.to(next(self.probe.parameters()).device)
+                feats = feats.float()
                 logits = self.probe(feats)
                 loss = self.criterion(logits, labels)
 
@@ -118,10 +129,11 @@ class LinearProbe(nn.Module):
         # Restore best weights for this run
         if best_state is not None:
             self.probe.load_state_dict(best_state)
+            self.probe.to(self.device)
 
         # Plot curves if requested
         if plot_path is not None:
-            plot_curves(
+            self.plot_curves(
                 train_losses=train_losses,
                 val_losses=val_losses,
                 save_path=plot_path,
@@ -137,42 +149,110 @@ class LinearProbe(nn.Module):
 
     def evaluate(self, loader):
         self.probe.eval()
+        self.vision.eval()
 
-        total = 0
-        correct = 0
-        total_loss = 0
+        total_loss = 0.0
+        total_examples = 0
+
+        all_preds = []
+        all_labels = []
 
         with torch.no_grad():
-
             for batch in loader:
-                images = batch["images"].to(self.device)
-                labels = batch["labels"].to(self.device)
+                images = batch["image"].to(self.device)
+                labels = batch["concept_vector"].float().to(self.device)
 
-                # Extract frozen vision features
                 outputs = self.vision(
                     pixel_values=images,
                     output_hidden_states=True,
                     return_dict=True,
                 )
-                feats = outputs.pooler_output  # [B, D]
 
-                feats = feats.to(next(self.probe.parameters()).device)
+                # Same feature extraction as training
+                feats = outputs.last_hidden_state[:, 0].float()
+
                 logits = self.probe(feats)
 
                 loss = self.criterion(logits, labels)
+
                 batch_size = labels.size(0)
-                total_loss += loss.item()
+                total_loss += loss.item() * batch_size
+                total_examples += batch_size
 
-                preds = torch.argmax(logits, dim=1)
-                correct += (preds == labels).sum().item()
-                total += batch_size
+                probs = torch.sigmoid(logits)
+                preds = (probs >= 0.5).float()
 
-        accuracy = correct / total if total > 0 else 0.0
-        avg_loss = total_loss / len(loader) if total > 0 else 0.0
+                all_preds.append(preds.cpu())
+                all_labels.append(labels.cpu())
+
+        avg_loss = total_loss / total_examples
+
+        all_preds = torch.cat(all_preds, dim=0).numpy()
+        all_labels = torch.cat(all_labels, dim=0).numpy()
+
+        # Label-wise accuracy
+        accuracy = (all_preds == all_labels).mean()
+
+        # Sample-wise (exact match) accuracy
+        sample_accuracy = (all_preds == all_labels).all(axis=1).mean()
+
+        # Overall metrics
+        precision = precision_score(
+            all_labels,
+            all_preds,
+            average="micro",
+            zero_division=0,
+        )
+
+        recall = recall_score(
+            all_labels,
+            all_preds,
+            average="micro",
+            zero_division=0,
+        )
+
+        f1 = f1_score(
+            all_labels,
+            all_preds,
+            average="micro",
+            zero_division=0,
+        )
+
+        # Per-concept metrics
+        per_concept_accuracy = (all_preds == all_labels).mean(axis=0)
+
+        per_concept_precision = precision_score(
+            all_labels,
+            all_preds,
+            average=None,
+            zero_division=0,
+        )
+
+        per_concept_recall = recall_score(
+            all_labels,
+            all_preds,
+            average=None,
+            zero_division=0,
+        )
+
+        per_concept_f1 = f1_score(
+            all_labels,
+            all_preds,
+            average=None,
+            zero_division=0,
+        )
 
         return {
-            "accuracy": accuracy,
             "loss": avg_loss,
+            "accuracy": accuracy,
+            "sample_accuracy": sample_accuracy,
+            "precision": precision,
+            "recall": recall,
+            "f1": f1,
+            "per_concept_accuracy": per_concept_accuracy,
+            "per_concept_precision": per_concept_precision,
+            "per_concept_recall": per_concept_recall,
+            "per_concept_f1": per_concept_f1,
         }
 
 
@@ -242,20 +322,20 @@ class LinearProbe(nn.Module):
 
         return results, best_lr
 
-@staticmethod
-def plot_curves(train_losses, val_losses, save_path=None, title="Training and Validation Curves"):
-    plt.figure(figsize=(8, 5))
 
-    plt.plot(range(1, len(train_losses) + 1), train_losses, label="Training Loss", color="blue")
-    plt.plot(range(1, len(val_losses) + 1), val_losses, label="Validation Loss", color="orange")
+    def plot_curves(self, train_losses, val_losses, save_path=None, title="Training and Validation Curves"):
+        plt.figure(figsize=(8, 5))
 
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.title(title)
-    plt.legend()
-    plt.grid(True, alpha=0.3)
+        plt.plot(range(1, len(train_losses) + 1), train_losses, label="Training Loss", color="blue")
+        plt.plot(range(1, len(val_losses) + 1), val_losses, label="Validation Loss", color="orange")
 
-    if save_path is not None:
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        plt.savefig(save_path, bbox_inches="tight")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.title(title)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+
+        if save_path is not None:
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            plt.savefig(save_path, bbox_inches="tight")
 
