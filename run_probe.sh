@@ -4,7 +4,7 @@ set -euo pipefail
 source "$HOME/miniconda3/etc/profile.d/conda.sh"
 conda activate mlu
 
-cd "$HOME/Concept-aware-vision-encoder"
+cd "$HOME/Concept-aware-vision-encoder/scripts"
 
 echo "Host: $(hostname)"
 echo "Started: $(date)"
