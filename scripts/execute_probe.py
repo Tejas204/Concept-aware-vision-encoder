@@ -25,6 +25,7 @@ if __name__ == "__main__":
     # -----------------------------------------------------------------------------------
     types = ["predicate", "concept", "object"]
     for type in types:
+        print(f"||Starting probe experiments for {type}||")
 
         # define static variables:
         image_storage_path = CONFIG[type]["image_storage_path"]
