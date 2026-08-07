@@ -14,7 +14,7 @@ from sklearn.metrics import (f1_score, precision_score, recall_score,)
 
 
 class LinearProbe(nn.Module):
-    def __init__(self, num_classes, model, num_epochs, criterion, train_loader, test_loader, val_loader):
+    def __init__(self, num_classes, model, num_epochs, criterion, train_loader, test_loader, val_loader, type):
         super().__init__()
         self.num_classes = num_classes
         self.model_name = model
@@ -23,6 +23,7 @@ class LinearProbe(nn.Module):
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.val_loader = val_loader
+        self.type = type
         self.device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
         print(f"Beginning probe for: {model}")
 
@@ -39,7 +40,6 @@ class LinearProbe(nn.Module):
             self.model.to(self.device)
 
         self.vision = self.model.model.vision_tower
-        print(self.vision.config)
         self.vision.eval()
 
         for p in self.vision.parameters():
@@ -51,8 +51,8 @@ class LinearProbe(nn.Module):
         )
         self.probe.to(self.device)
         
-    def fit(self, optimizer, patience=5, plot_path=None):
-        best_val_loss = float("inf")
+    def fit(self, optimizer, patience=3, plot_path=None):
+        best_f1 = -1.0
         best_state = None
         epochs_without_improvement = 0
 
@@ -60,6 +60,7 @@ class LinearProbe(nn.Module):
         val_losses = []
 
         for epoch in range(self.num_epochs):
+
             # ------------------------
             # Training
             # ------------------------
@@ -78,22 +79,19 @@ class LinearProbe(nn.Module):
                         output_hidden_states=True,
                         return_dict=True,
                     )
-                    feats = outputs.last_hidden_state[:, 0]
 
-                feats = feats.float()
+                    feats = outputs.last_hidden_state[:, 0].float()
+
                 logits = self.probe(feats)
+
                 loss = self.criterion(logits, labels)
 
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
-                # Loss per item in batch
                 running_train_loss += loss.item()
 
-            print(f"Loss after epoch {epoch + 1} = {running_train_loss}")
-
-            # Average loss per batch
             train_loss = running_train_loss / len(self.train_loader)
             train_losses.append(train_loss)
 
@@ -101,47 +99,45 @@ class LinearProbe(nn.Module):
             # Validation
             # ------------------------
             val_metrics = self.evaluate(self.val_loader)
-            val_loss = val_metrics["loss"]
-            val_acc = val_metrics["accuracy"]
-            val_losses.append(val_loss)
+
+            val_losses.append(val_metrics["loss"])
 
             print(
-                f"Epoch {epoch + 1}/{self.num_epochs} | "
+                f"Epoch {epoch+1}/{self.num_epochs} | "
                 f"Train Loss: {train_loss:.4f} | "
-                f"Val Loss: {val_loss:.4f} | "
-                f"Val Acc: {val_acc:.4f}"
+                f"Val Loss: {val_metrics['loss']:.4f} | "
+                f"Micro F1: {val_metrics['f1']:.4f} | "
+                f"Sample Acc: {val_metrics['sample_accuracy']:.4f}"
             )
 
             # ------------------------
-            # Early stopping checkpoint
+            # Early stopping
             # ------------------------
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
+            if val_metrics["f1"] > best_f1:
+                best_f1 = val_metrics["f1"]
                 best_state = copy.deepcopy(self.probe.state_dict())
                 epochs_without_improvement = 0
             else:
                 epochs_without_improvement += 1
 
             if epochs_without_improvement >= patience:
-                print("Early stopping triggered.")
+                print("Early stopping.")
                 break
 
-        # Restore best weights for this run
         if best_state is not None:
             self.probe.load_state_dict(best_state)
             self.probe.to(self.device)
 
-        # Plot curves if requested
         if plot_path is not None:
             self.plot_curves(
-                train_losses=train_losses,
-                val_losses=val_losses,
-                save_path=plot_path,
-                title="Probe Training vs Validation Loss",
+                train_losses,
+                val_losses,
+                plot_path,
+                "Training vs Validation Loss",
             )
 
         return {
-            "best_loss": best_val_loss,
+            "best_f1": best_f1,
             "best_state": best_state,
             "train_losses": train_losses,
             "val_losses": val_losses,
@@ -158,7 +154,8 @@ class LinearProbe(nn.Module):
         all_labels = []
 
         with torch.no_grad():
-            for batch in loader:
+            for idx, batch in enumerate(loader):
+                print(f"Processing batch {idx+1}/{len(loader)}")
                 images = batch["image"].to(self.device)
                 labels = batch["concept_vector"].float().to(self.device)
 
@@ -265,7 +262,7 @@ class LinearProbe(nn.Module):
 
         initial_weights = copy.deepcopy(self.probe.state_dict())
 
-        best_loss = float("inf")
+        best_f1 = -1.0
         best_lr = None
         best_state = None
         results = {}
@@ -283,17 +280,17 @@ class LinearProbe(nn.Module):
 
             optimizer = torch.optim.Adam(self.probe.parameters(), lr=lr)
 
-            run_plot_path = f"visualizations/train_val_lr_{lr}.png"
+            run_plot_path = f"/Users/tejasdhopavkar/Documents/MS/Saarland_University/Semester_3/MLU/CAVE/visualizations/{self.type}/train_val_lr_{lr}.png"
             history = self.fit(
                 optimizer=optimizer,
-                patience=5,
+                patience=3,
                 plot_path=run_plot_path,
             )
 
             results[lr] = history
 
-            if history["best_loss"] < best_loss:
-                best_loss = history["best_loss"]
+            if history["best_f1"] > best_f1:
+                best_f1 = history["best_f1"]
                 best_lr = lr
                 best_state = copy.deepcopy(history["best_state"])
 
@@ -304,10 +301,9 @@ class LinearProbe(nn.Module):
         checkpoint = {
             "probe_state_dict": best_state,
             "learning_rate": best_lr,
-            "validation_loss": best_loss,
+            "validation_f1": best_f1,
             "num_classes": self.num_classes,
             "epochs": self.num_epochs,
-            "activation": self.activation.__name__ if hasattr(self.activation, "__name__") else str(self.activation),
             "vision_model": self.model_name,
         }
 
@@ -316,7 +312,7 @@ class LinearProbe(nn.Module):
         print("\n" + "=" * 60)
         print("Hyperparameter search finished")
         print(f"Best learning rate: {best_lr}")
-        print(f"Best validation loss: {best_loss:.6f}")
+        print(f"Best validation loss: {best_f1:.6f}")
         print(f"Checkpoint saved to: {save_path}")
         print("=" * 60)
 

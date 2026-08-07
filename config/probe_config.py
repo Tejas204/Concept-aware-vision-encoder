@@ -7,7 +7,7 @@ CONFIG = {
     "concept": {
         "image_storage_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/dataset",
         "result_storage_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/results/linear_probe_metrics",
-        "checkpoint_path": "checkpoints",
+        "checkpoint_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/checkpoints",
         "model": "/scratch/common_models/llava-onevision-qwen2-7b-si-hf",
         "probe_type": "concept",
         "data_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/concept_metadata.json",
@@ -22,9 +22,9 @@ CONFIG = {
     "predicate": {
         "image_storage_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/dataset",
         "result_storage_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/results/linear_probe_metrics",
-        "checkpoint_path": "checkpoints",
+        "checkpoint_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/checkpoints",
         "model": "/scratch/common_models/llava-onevision-qwen2-7b-si-hf",
-        "probe_type": "concept",
+        "probe_type": "predicate",
         "data_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/concept_metadata.json",
         "concept_path":"/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/concepts.json",
         "object_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/objects.json",
@@ -37,9 +37,9 @@ CONFIG = {
     "object": {
         "image_storage_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/dataset",
         "result_storage_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/results/linear_probe_metrics",
-        "checkpoint_path": "checkpoints",
+        "checkpoint_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/checkpoints",
         "model": "/scratch/common_models/llava-onevision-qwen2-7b-si-hf",
-        "probe_type": "concept",
+        "probe_type": "object",
         "data_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/concept_metadata.json",
         "concept_path":"/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/concepts.json",
         "object_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/objects.json",

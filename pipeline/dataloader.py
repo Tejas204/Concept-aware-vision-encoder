@@ -34,8 +34,8 @@ class SpatialSenseDataset(Dataset):
         # Create a dictionary of number of entities for each probe type
         entity_dict = {
             "concept": len(self.concepts),
-            "objects": len(self.objects),
-            "predicates": len(self.predicates)
+            "object": len(self.objects),
+            "predicate": len(self.predicates)
         }
 
 
@@ -51,8 +51,15 @@ class SpatialSenseDataset(Dataset):
             # 2. Probing for positional predicates only: on, under.
             # 3. Probing for compositional concepts: cat_on_table
             concept_vector = np.zeros(entity_dict[self.probe_type], dtype=int)
-            for idx in entry["concept_indices"]:
-                concept_vector[idx] = 1
+            if self.probe_type == "predicate":
+                for idx in entry["predicate_indices"]:
+                    concept_vector[idx] = 1
+            elif self.probe_type == "concept":
+                for idx in entry["concept_indices"]:
+                    concept_vector[idx] = 1
+            else:
+                for idx in entry["object_indices"]:
+                    concept_vector[idx] = 1
 
             self.samples.append({
                 "img_id": img_id,
