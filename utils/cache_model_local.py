@@ -4,10 +4,10 @@ from pathlib import Path
 from huggingface_hub import snapshot_download
 
 # Hugging Face repository
-MODEL_ID = "llava-hf/llava-onevision-qwen2-7b-si-hf"
+MODEL_ID = "llava-hf/llava-onevision-qwen2-0.5b-si-hf"
 
 # Destination directory
-DEST_DIR = Path("/nethome/tadhopavkar/Concept-aware-vision-encoder/models") / "llava-onevision-qwen2-7b-si-hf"
+DEST_DIR = Path("/nethome/tadhopavkar/Concept-aware-vision-encoder/models") / "llava-onevision-qwen2-0.5b-si-hf"
 
 DEST_DIR.parent.mkdir(parents=True, exist_ok=True)
 
