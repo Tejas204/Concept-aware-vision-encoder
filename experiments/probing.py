@@ -280,7 +280,7 @@ class LinearProbe(nn.Module):
 
             optimizer = torch.optim.Adam(self.probe.parameters(), lr=lr)
 
-            run_plot_path = f"/Users/tejasdhopavkar/Documents/MS/Saarland_University/Semester_3/MLU/CAVE/visualizations/{self.type}/train_val_lr_{lr}.png"
+            run_plot_path = f"/nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/{self.type}/train_val_lr_{lr}.png"
             history = self.fit(
                 optimizer=optimizer,
                 patience=3,

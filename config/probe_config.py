@@ -16,7 +16,7 @@ CONFIG = {
         "predicate_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/predicates.json",
         "activation":torch.nn.Sigmoid,
         "num_classes":14094,
-        "num_epochs":100,
+        "num_epochs":15,
         "criterion":torch.nn.BCEWithLogitsLoss()
     },
     "predicate": {
@@ -31,7 +31,7 @@ CONFIG = {
         "predicate_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/predicates.json",
         "activation":torch.nn.Sigmoid,
         "num_classes":18,
-        "num_epochs":100,
+        "num_epochs":15,
         "criterion":torch.nn.BCEWithLogitsLoss()
     },
     "object": {
@@ -46,7 +46,7 @@ CONFIG = {
         "predicate_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/data/metadata/predicates.json",
         "activation":torch.nn.Sigmoid,
         "num_classes":3679,
-        "num_epochs":100,
+        "num_epochs":15,
         "criterion":torch.nn.BCEWithLogitsLoss()
     }
 }
