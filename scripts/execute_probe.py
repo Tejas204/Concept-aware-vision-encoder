@@ -1,7 +1,7 @@
 import sys
 import os
 import json
-import torch
+import numpy as np
 from pathlib import Path
 from torch.nn import Softmax
 import torchvision.transforms as transforms
@@ -12,6 +12,13 @@ sys.path.append(os.path.dirname(SCRIPT_DIR))
 from pipeline import dataloader
 from experiments import probing
 from config.probe_config import CONFIG
+
+def to_serializable(obj):
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, np.generic):
+        return obj.item()
+    return obj
  
 if __name__ == "__main__":
 
@@ -99,9 +106,11 @@ if __name__ == "__main__":
 
         print(metrics)
 
+        metrics = {k: to_serializable(v) for k, v in metrics.items()}
+
         # -----------------------------------------------------------------------------------
         # Save the results in the file
-        result_dir = Path(CONFIG[type]["result_storage_path"])
+        result_dir = Path(result_storage_path)
         result_dir.mkdir(parents=True, exist_ok=True)
 
         with open(result_dir / f"{probe_type}_metric.json", "w") as metfile:

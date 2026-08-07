@@ -52,6 +52,9 @@ class LinearProbe(nn.Module):
         self.probe.to(self.device)
         
     def fit(self, optimizer, patience=3, plot_path=None):
+        if len(self.train_loader) == 0:
+            raise ValueError("Training dataloader is empty.")
+        
         best_f1 = -1.0
         best_state = None
         epochs_without_improvement = 0
@@ -144,6 +147,9 @@ class LinearProbe(nn.Module):
         }
 
     def evaluate(self, loader):
+        if len(loader) == 0:
+            raise ValueError("Evaluation dataloader is empty.")
+        
         self.probe.eval()
         self.vision.eval()
 
@@ -184,6 +190,8 @@ class LinearProbe(nn.Module):
 
         avg_loss = total_loss / total_examples
 
+        if not all_preds:
+            raise ValueError("No predictions were generated during evaluation.")
         all_preds = torch.cat(all_preds, dim=0).numpy()
         all_labels = torch.cat(all_labels, dim=0).numpy()
 
@@ -306,6 +314,9 @@ class LinearProbe(nn.Module):
             "epochs": self.num_epochs,
             "vision_model": self.model_name,
         }
+
+        if best_state is None:
+            raise RuntimeError("No best model was found during hyperparameter search.")
 
         torch.save(checkpoint, save_path)
 
