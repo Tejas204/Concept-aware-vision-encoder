@@ -19,7 +19,7 @@ PY
 
 python evaluate_aro_llava.py \
   --model-id /scratch/common_models/llava-onevision-qwen2-0.5b-si-hf \
-  --output-dir /nethome/tadhopavkar/Concept-aware-vision-encoder/results/llava-onevision-qwen2-0.5b-si-hf/aro_baseline \
+  --output-dir /nethome/tadhopavkar/Concept-aware-vision-encoder/results/aro_baseline/llava-onevision-qwen2-0.5b-si-hf \
   --seeds 42 123 17
 
 echo "=========================================="
