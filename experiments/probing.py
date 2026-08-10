@@ -83,7 +83,8 @@ class LinearProbe(nn.Module):
                         return_dict=True,
                     )
 
-                    feats = outputs.last_hidden_state[:, 0].float()
+                    # feats = outputs.last_hidden_state[:, 0].float()
+                    feats = outputs.last_hidden_state.mean(dim=1).float()
 
                 logits = self.probe(feats)
 
