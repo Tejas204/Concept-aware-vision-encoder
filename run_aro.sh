@@ -20,7 +20,7 @@ PY
 python evaluate_aro_llava.py \
   --model-id /scratch/common_models/llava-onevision-qwen2-0.5b-si-hf \
   --output-dir /nethome/tadhopavkar/Concept-aware-vision-encoder/results/aro_baseline/llava-onevision-qwen2-0.5b-si-hf \
-  --generate-visualization True \
+  --generate-visualization \
   --plot-output-dir /nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/aro_baseline/llava-onevision-qwen2-0.5b-si-hf \
   --seeds 42 123 17
 
