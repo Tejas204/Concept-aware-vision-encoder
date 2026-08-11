@@ -33,10 +33,14 @@ if __name__ == "__main__":
         checkpoint_path = CONFIG[type]["checkpoint_path"]
         model = CONFIG[type]["model"]
         probe_type = CONFIG[type]["probe_type"]
+        vision_checkpoint = CONFIG[type].get("vision_checkpoint")
+        vision_adapter = CONFIG[type].get("vision_adapter")
+        use_qlora = CONFIG[type].get("use_qlora", False)
+        probe_checkpoint = CONFIG[type].get("probe_checkpoint")
 
         # -----------------------------------------------------------------------------------
         # define transform
-        transform = transforms.Compose([transforms.Resize((384, 384)), transforms.ToTensor()])
+        transform = transforms.Compose([transforms.Resize((384, 384)), transforms.ToTensor(), transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))])
 
         # -----------------------------------------------------------------------------------
         # Get training data loader
@@ -95,13 +99,18 @@ if __name__ == "__main__":
                 train_loader=train_loader,
                 val_loader=validation_loader,
                 test_loader=test_loader,
-                type=type
+                type=type,
+                vision_checkpoint=vision_checkpoint,
+                vision_adapter=vision_adapter,
+                use_qlora=use_qlora,
+                probe_checkpoint=probe_checkpoint
             )
 
-        results, best_lr = probe.hyperparameter_search(
-            learning_rates=[1e-2, 1e-3, 1e-4],
-            save_path=f"{checkpoint_path}/llava_probe_{probe_type}.pt",
-        )
+        if probe_checkpoint is None:
+            results, best_lr = probe.hyperparameter_search(
+                learning_rates=[1e-2, 1e-3, 1e-4],
+                save_path=f"{checkpoint_path}/llava_probe_{probe_type}.pt",
+            )
 
         metrics = probe.evaluate(probe.test_loader)
 
@@ -116,4 +125,3 @@ if __name__ == "__main__":
 
         with open(result_dir / f"{probe_type}_metric.json", "w") as metfile:
             json.dump(metrics, metfile, indent=4)
-

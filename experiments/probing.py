@@ -8,13 +8,13 @@ import torch.functional as functional
 import torch.nn as nn
 import copy
 import huggingface_hub
-from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration
+from transformers import AutoProcessor, BitsAndBytesConfig, LlavaOnevisionForConditionalGeneration, SiglipModel
 from sklearn.metrics import (f1_score, precision_score, recall_score,)
 
 
 
 class LinearProbe(nn.Module):
-    def __init__(self, num_classes, model, num_epochs, criterion, train_loader, test_loader, val_loader, type):
+    def __init__(self, num_classes, model, num_epochs, criterion, train_loader, test_loader, val_loader, type, vision_checkpoint=None, vision_adapter=None, use_qlora=False, probe_checkpoint=None, siglip_model_name="google/siglip-so400m-patch14-384"):
         super().__init__()
         self.num_classes = num_classes
         self.model_name = model
@@ -24,6 +24,7 @@ class LinearProbe(nn.Module):
         self.test_loader = test_loader
         self.val_loader = val_loader
         self.type = type
+        self.siglip_model_name = siglip_model_name
         self.device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
         print(f"Beginning probe for: {model}")
 
@@ -33,6 +34,10 @@ class LinearProbe(nn.Module):
 
         if self.device == "cuda":
             kwargs["device_map"] = "auto"
+        if use_qlora:
+            if self.device != "cuda":
+                raise ValueError("QLoRA requires CUDA and bitsandbytes.")
+            kwargs["quantization_config"] = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.float16, bnb_4bit_use_double_quant=True)
 
         self.model = LlavaOnevisionForConditionalGeneration.from_pretrained(model, **kwargs)
 
@@ -40,16 +45,48 @@ class LinearProbe(nn.Module):
             self.model.to(self.device)
 
         self.vision = self.model.model.vision_tower
+        self.device = next(self.vision.parameters()).device
+        if vision_checkpoint is not None and vision_adapter is not None:
+            raise ValueError("Pass either vision_checkpoint or vision_adapter, not both.")
+        if vision_checkpoint is not None:
+            checkpoint = torch.load(vision_checkpoint, map_location=self.device)
+            self.vision.load_state_dict(checkpoint["vision_state_dict"])
+        if vision_adapter is not None:
+            try:
+                from peft import PeftModel
+            except ImportError as error:
+                raise ImportError("Install peft to load a LoRA/QLoRA vision adapter.") from error
+            self.vision = PeftModel.from_pretrained(self.vision, vision_adapter, is_trainable=False)
+            self.model.model.vision_tower = self.vision
         self.vision.eval()
 
+        # Freeze the vision tower completely
         for p in self.vision.parameters():
             p.requires_grad = False
 
+        # Hidden size helps in projection
         hidden_size = self.vision.config.hidden_size
+
+        # Linear probe
         self.probe = nn.Sequential(
             nn.Linear(hidden_size, self.num_classes),
         )
         self.probe.to(self.device)
+        if probe_checkpoint is not None:
+            checkpoint = torch.load(probe_checkpoint, map_location=self.device)
+            self.probe.load_state_dict(checkpoint["probe_state_dict"])
+
+        # Load SigLip model to use vision pooler. We don't need patch level concepts
+        self.siglip = SiglipModel.from_pretrained(self.siglip_model_name).to(self.device)
+        self.vision_pooler = self.siglip.vision_model.head
+        self.logit_scale = self.siglip.logit_scale
+        self.logit_bias = self.siglip.logit_bias
+
+        # Freeze vision pooler, scale and bias
+        for p in self.siglip.vision_model.head.parameters():
+            p.requires_grad = False
+        self.siglip.logit_scale.requires_grad_(False)
+        self.siglip.logit_bias.requires_grad_(False)
         
     def fit(self, optimizer, patience=3, plot_path=None):
         if len(self.train_loader) == 0:
@@ -84,9 +121,11 @@ class LinearProbe(nn.Module):
                     )
 
                     # feats = outputs.last_hidden_state[:, 0].float()
-                    feats = outputs.last_hidden_state.mean(dim=1).float()
+                    # feats = outputs.last_hidden_state.mean(dim=1).float()
+                    feats = outputs.last_hidden_state[:].float()
+                    pooled_image_feats = self.vision_pooler(feats)
 
-                logits = self.probe(feats)
+                logits = self.probe(pooled_image_feats)
 
                 loss = self.criterion(logits, labels)
 
@@ -173,9 +212,10 @@ class LinearProbe(nn.Module):
                 )
 
                 # Same feature extraction as training
-                feats = outputs.last_hidden_state[:, 0].float()
+                feats = outputs.last_hidden_state[:].float()
+                pooled_image_feats = self.vision_pooler(feats)
 
-                logits = self.probe(feats)
+                logits = self.probe(pooled_image_feats)
 
                 loss = self.criterion(logits, labels)
 
@@ -346,4 +386,3 @@ class LinearProbe(nn.Module):
         if save_path is not None:
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             plt.savefig(save_path, bbox_inches="tight")
-

@@ -17,7 +17,12 @@ CONFIG = {
         "activation":torch.nn.Sigmoid,
         "num_classes":14094,
         "num_epochs":15,
-        "criterion":torch.nn.BCEWithLogitsLoss()
+        "criterion":torch.nn.BCEWithLogitsLoss(),
+        "vision_checkpoint": None,
+        "vision_adapter": None,
+        "use_qlora": None,
+        "probe_checkpoint": None
+
     },
     "predicate": {
         "image_storage_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/dataset",
@@ -32,7 +37,11 @@ CONFIG = {
         "activation":torch.nn.Sigmoid,
         "num_classes":18,
         "num_epochs":15,
-        "criterion":torch.nn.BCEWithLogitsLoss()
+        "criterion":torch.nn.BCEWithLogitsLoss(),
+        "vision_checkpoint": None,
+        "vision_adapter": None,
+        "use_qlora": None,
+        "probe_checkpoint": None
     },
     "object": {
         "image_storage_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/dataset",
@@ -47,6 +56,10 @@ CONFIG = {
         "activation":torch.nn.Sigmoid,
         "num_classes":3679,
         "num_epochs":15,
-        "criterion":torch.nn.BCEWithLogitsLoss()
+        "criterion":torch.nn.BCEWithLogitsLoss(),
+        "vision_checkpoint": None,
+        "vision_adapter": None,
+        "use_qlora": None,
+        "probe_checkpoint": None
     }
 }

@@ -19,6 +19,26 @@ python evaluate_aro_llava.py \
   --vision-adapter checkpoints/vision_adapter \
   --output-dir results/aro_finetuned
 
+---------------------------------------------------------
+# Original model
+python experiments/evaluate_aro_llava.py --model-id MODEL
+
+# Standard fine-tuned vision encoder
+python evaluate_aro_llava.py \
+  --model-id llava-hf/llava-onevision-qwen2-7b-ov-hf \
+  --output-dir results/aro_baseline
+
+# LoRA vision adapter
+python evaluate_aro_llava.py \
+  llava-hf/llava-onevision-qwen2-7b-ov-hf \
+  --vision-adapter checkpoints/best_finetuned_siglip_vision_adapter
+
+# QLoRA adapter with quantized base
+python evaluate_aro_llava.py \
+  llava-hf/llava-onevision-qwen2-7b-ov-hf \
+  --vision-adapter checkpoints/best_finetuned_siglip_vision_adapter \
+  --use-qlora
+
 The output directory receives predictions.jsonl and summary.json.  The latter
 contains micro accuracy, macro (per-relation) accuracy, and relation counts.
 """
@@ -38,7 +58,7 @@ from datasets import Dataset, concatenate_datasets, load_dataset
 from PIL import Image
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
-from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration
+from transformers import AutoProcessor, BitsAndBytesConfig, LlavaOnevisionForConditionalGeneration
 
 
 # This is our explicit spatial subset. ARO does not publish it as a separate split.
@@ -68,6 +88,8 @@ def parse_args() -> argparse.Namespace:
             "vision encoder. Omit this flag for the untouched LLaVA baseline."
         ),
     )
+    p.add_argument("--vision-checkpoint", type=Path, default=None)
+    p.add_argument("--use-qlora", action="store_true")
     p.add_argument("--dataset-id", default="mteb/ARO-Visual-Relation")
     p.add_argument("--split", default="test")
     p.add_argument("--list-relations", action="store_true",
@@ -223,31 +245,48 @@ def load_vision_adapter(model: LlavaOnevisionForConditionalGeneration, path: Pat
             "Loading --vision-adapter requires PEFT. Install it with: pip install peft"
         ) from error
 
-    model.vision_tower = PeftModel.from_pretrained(
-        model.vision_tower,
+    model.model.vision_tower = PeftModel.from_pretrained(
+        model.model.vision_tower,
         str(path),
         is_trainable=False,
     )
     print(f"Loaded vision adapter from {path}")
 
 
+def load_vision_checkpoint(model: LlavaOnevisionForConditionalGeneration, path: Path) -> None:
+    checkpoint = torch.load(path, map_location="cpu")
+    model.model.vision_tower.load_state_dict(checkpoint["vision_state_dict"])
+    print(f"Loaded vision checkpoint from {path}")
+
+
 def main() -> None:
     args = parse_args()
+
+    if args.vision_checkpoint is not None and args.vision_adapter is not None:
+        raise ValueError("Pass either --vision-checkpoint or --vision-adapter, not both.")
+    if args.use_qlora and args.vision_adapter is None:
+        raise ValueError("--use-qlora requires --vision-adapter.")
 
     # Select device and data type
     device = choose_device(args.device)
     dtype = choose_dtype(args.dtype, device)
+    if args.use_qlora and device.type != "cuda":
+        raise ValueError("QLoRA requires CUDA and bitsandbytes.")
 
     # Load model
     print(f"Loading {args.model_id} on {device} with {dtype} ...")
-    model = LlavaOnevisionForConditionalGeneration.from_pretrained(
-        args.model_id,
-        torch_dtype=dtype,
-        low_cpu_mem_usage=True,
-    )
+    model_kwargs = {"torch_dtype": dtype, "low_cpu_mem_usage": True}
+    if args.use_qlora:
+        model_kwargs["device_map"] = "auto"
+        model_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=dtype, bnb_4bit_use_double_quant=True)
+    model = LlavaOnevisionForConditionalGeneration.from_pretrained(args.model_id, **model_kwargs)
+    if args.vision_checkpoint is not None:
+        load_vision_checkpoint(model, args.vision_checkpoint)
     if args.vision_adapter is not None:
         load_vision_adapter(model, args.vision_adapter)
-    model.to(device=device, dtype=dtype).eval()
+    if not args.use_qlora:
+        model.to(device=device, dtype=dtype)
+    model.eval()
 
     for seed in args.seeds:
         random.seed(seed)
@@ -324,6 +363,10 @@ def main() -> None:
             "vision_adapter": (
                 str(args.vision_adapter.resolve()) if args.vision_adapter is not None else None
             ),
+            "vision_checkpoint": (
+                str(args.vision_checkpoint.resolve()) if args.vision_checkpoint is not None else None
+            ),
+            "use_qlora": args.use_qlora,
             "dataset_id": args.dataset_id,
             "split": args.split,
             "spatial_relations": sorted(DEFAULT_SPATIAL_RELATIONS),

@@ -4,10 +4,10 @@ from pathlib import Path
 from huggingface_hub import snapshot_download
 
 # Hugging Face repository
-MODEL_ID = "llava-hf/llava-onevision-qwen2-0.5b-si-hf"
+MODEL_ID = "google/siglip-so400m-patch14-384"
 
 # Destination directory
-DEST_DIR = Path("/scratch/common_models") / "llava-onevision-qwen2-0.5b-si-hf"
+DEST_DIR = Path("/scratch/common_models") / "siglip-so400m-patch14-384"
 
 DEST_DIR.parent.mkdir(parents=True, exist_ok=True)
 

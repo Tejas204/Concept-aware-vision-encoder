@@ -8,6 +8,22 @@ from PIL import Image
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 
+
+def finetune_collate_fn(batch):
+    """Stack fixed-size tensors and preserve variable-length caption lists."""
+    if not batch:
+        raise ValueError("Cannot collate an empty batch.")
+    captions = [sample["captions"] for sample in batch]
+    if any(len(image_captions) == 0 for image_captions in captions):
+        raise ValueError("Every image must have at least one caption.")
+    return {
+        "images": torch.stack([sample["images"] for sample in batch]),
+        "concept_vector": torch.stack([sample["concept_vector"] for sample in batch]),
+        "predicate_vector": torch.stack([sample["predicate_vector"] for sample in batch]),
+        "object_vector": torch.stack([sample["object_vector"] for sample in batch]),
+        "captions": captions,
+    }
+
 class FineTuneLoader(Dataset):
     def __init__(self, data_path, concept_path, object_path, predicate_path, split, probe_type, transform = None):
         self.data_path = data_path
@@ -48,8 +64,8 @@ class FineTuneLoader(Dataset):
 
             # Construct binary concept vectors
             concept_vector = np.zeros(entity_dict["concept"], dtype=int)
-            predicate_vector = np.zeros(entity_dict["object"], dtype=int)
-            object_vector = np.zeros(entity_dict["predicate"], dtype=int)
+            predicate_vector = np.zeros(entity_dict["predicate"], dtype=int)
+            object_vector = np.zeros(entity_dict["object"], dtype=int)
    
             for idx in entry["predicate_indices"]:
                 predicate_vector[idx] = 1
@@ -63,7 +79,7 @@ class FineTuneLoader(Dataset):
             # Create a list of captions for the image
             captions = []
             for annot in entry["annotations"]:
-                captions.append[annot["caption"]]
+                captions.append(annot["caption"])
 
             self.samples.append({
                 "img_id": img_id,
@@ -100,9 +116,9 @@ class FineTuneLoader(Dataset):
         if self.transform:
             image = self.transform(image)
 
-        return {"image": image, 
-                "concept_vector": sample["concept_vector"], 
-                "predicate_vector": sample["predicate_vector"], 
+        return {"images": image,
+                "concept_vector": sample["concept_vector"],
+                "predicate_vector": sample["predicate_vector"],
                 "object_vector": sample["object_vector"],
                 "captions": sample["captions"]}
 
@@ -122,5 +138,5 @@ class FineTuneLoader(Dataset):
 
         shuffle = True if split == "train" else False
 
-        loader = torch.utils.data.DataLoader(dataset=self, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+        loader = torch.utils.data.DataLoader(dataset=self, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, collate_fn=finetune_collate_fn)
         return loader
