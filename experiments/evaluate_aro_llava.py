@@ -24,13 +24,13 @@ python evaluate_aro_llava.py \
 python experiments/evaluate_aro_llava.py --model-id MODEL
 
 # Standard fine-tuned vision encoder
-python evaluate_aro_llava.py \
-  --model-id llava-hf/llava-onevision-qwen2-7b-ov-hf \
-  --output-dir results/aro_baseline
+python experiments/evaluate_aro_llava.py \
+  --model-id lava-hf/llava-onevision-qwen2-7b-ov-hf \
+  --vision-checkpoint checkpoints/best_finetuned_siglip.pt
 
 # LoRA vision adapter
 python evaluate_aro_llava.py \
-  llava-hf/llava-onevision-qwen2-7b-ov-hf \
+  --model-id llava-hf/llava-onevision-qwen2-7b-ov-hf \
   --vision-adapter checkpoints/best_finetuned_siglip_vision_adapter
 
 # QLoRA adapter with quantized base
@@ -48,10 +48,12 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import textwrap
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
 from datasets import Dataset, concatenate_datasets, load_dataset
@@ -99,6 +101,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seeds", type=int, nargs="+", default=[42])
     p.add_argument("--max-samples", type=int, default=None)
     p.add_argument("--output-dir", type=Path, default=Path("results/aro_llava"))
+    p.add_argument("--plot-examples", action="store_true")
+    p.add_argument("--generate-visualization", action=argparse.BooleanOptionalAction, default=False)
+    p.add_argument("--plot-output-dir", type=Path, default=Path("visualizations/aro_examples"))
     p.add_argument("--device", choices=["auto", "cuda", "mps", "cpu"], default="auto")
     p.add_argument("--dtype", choices=["auto", "float32", "float16", "bfloat16"], default="auto")
     return p.parse_args()
@@ -230,6 +235,38 @@ def captions_of(row: dict[str, Any]) -> tuple[str, str]:
     return true_caption, false_caption
 
 
+def plot_prediction_examples(predictions_path: Path, ds: Dataset, output_dir: Path) -> None:
+    records = [json.loads(line) for line in predictions_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for relation in sorted(DEFAULT_SPATIAL_RELATIONS):
+        relation_records = [record for record in records if normalize_relation(record["relation"]) == relation]
+        selected_records = [record for record in relation_records if record["correct"]][:2]
+        selected_records += [record for record in relation_records if not record["correct"]][:2]
+        figure, axes = plt.subplots(2, 2, figsize=(14, 12))
+
+        for axis, record in zip(axes.flat, selected_records):
+            row = ds[record["index"]]
+            caption_a = record["true_caption"] if record["gold"] == "A" else record["false_caption"]
+            caption_b = record["false_caption"] if record["gold"] == "A" else record["true_caption"]
+            marker_a = "★ MODEL SELECTED " if record["prediction"] == "A" else ""
+            marker_b = "★ MODEL SELECTED " if record["prediction"] == "B" else ""
+            text = f"Gold caption: {textwrap.fill(record['true_caption'], 60)}\n\n{marker_a}A: {textwrap.fill(caption_a, 60)}\n{marker_b}B: {textwrap.fill(caption_b, 60)}"
+            axis.imshow(image_of(row))
+            axis.set_title(f"{'Correct' if record['correct'] else 'Wrong'} | Sample {record['index']}", color="green" if record["correct"] else "red", fontsize=13)
+            axis.text(0.5, -0.08, text, transform=axis.transAxes, ha="center", va="top", fontsize=10)
+            axis.axis("off")
+
+        for axis in axes.flat[len(selected_records):]:
+            axis.axis("off")
+
+        figure.suptitle(relation.title(), fontsize=16)
+        figure.subplots_adjust(hspace=0.65, wspace=0.15)
+        filename = relation.replace(" ", "_") + "_correct_and_wrong.png"
+        figure.savefig(output_dir / filename, dpi=180, bbox_inches="tight")
+        plt.close(figure)
+
+
 def load_vision_adapter(model: LlavaOnevisionForConditionalGeneration, path: Path) -> None:
     """Attach a local PEFT adapter to LLaVA's vision tower for this process only."""
     config_path = path / "adapter_config.json"
@@ -261,6 +298,16 @@ def load_vision_checkpoint(model: LlavaOnevisionForConditionalGeneration, path: 
 
 def main() -> None:
     args = parse_args()
+
+    if args.plot_examples:
+        for seed in args.seeds:
+            random.seed(seed)
+            ds = prepare_dataset(args)
+            predictions_path = args.output_dir / f"seed_{seed}" / "predictions.jsonl"
+            if not predictions_path.is_file():
+                raise FileNotFoundError(f"{predictions_path} was not found.")
+            plot_prediction_examples(predictions_path, ds, args.plot_output_dir / f"seed_{seed}")
+        return
 
     if args.vision_checkpoint is not None and args.vision_adapter is not None:
         raise ValueError("Pass either --vision-checkpoint or --vision-adapter, not both.")
@@ -380,6 +427,8 @@ def main() -> None:
         summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(json.dumps(summary, indent=2, ensure_ascii=False))
         print(f"Saved {predictions_path} and {summary_path}")
+        if args.generate_visualization:
+            plot_prediction_examples(predictions_path, ds, args.plot_output_dir / f"seed_{seed}")
 
 
 if __name__ == "__main__":
