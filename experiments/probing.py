@@ -88,11 +88,11 @@ class LinearProbe(nn.Module):
         # self.siglip.logit_scale.requires_grad_(False)
         # self.siglip.logit_bias.requires_grad_(False)
         
-    def fit(self, optimizer, patience=3, min_delta=0.0001, plot_path=None):
+    def fit(self, optimizer, patience=4, min_delta=0.001, plot_path=None):
         if len(self.train_loader) == 0:
             raise ValueError("Training dataloader is empty.")
         
-        best_f1 = -1.0
+        best_val_loss = float("inf")
         best_state = None
         epochs_without_improvement = 0
 
@@ -156,15 +156,15 @@ class LinearProbe(nn.Module):
             # ------------------------
             # Early stopping
             # ------------------------
-            if val_metrics["f1"] > best_f1 + min_delta:
-                best_f1 = val_metrics["f1"]
+            if val_metrics["loss"] < best_val_loss - min_delta:
+                best_val_loss = val_metrics["loss"]
                 best_state = copy.deepcopy(self.probe.state_dict())
                 epochs_without_improvement = 0
             else:
                 epochs_without_improvement += 1
 
             if epochs_without_improvement >= patience:
-                print(f"Early stopping: validation F1 did not improve by more than {min_delta} for {patience} epochs.")
+                print(f"Early stopping: validation loss did not decrease by more than {min_delta} for {patience} epochs.")
                 break
 
         if best_state is not None:
@@ -180,7 +180,7 @@ class LinearProbe(nn.Module):
             )
 
         return {
-            "best_f1": best_f1,
+            "best_val_loss": best_val_loss,
             "best_state": best_state,
             "train_losses": train_losses,
             "val_losses": val_losses,
@@ -308,13 +308,13 @@ class LinearProbe(nn.Module):
         self,
         learning_rates,
         save_path="checkpoints/best_probe.pt",
-        patience=3,
+        patience=4,
         min_delta=0.001
     ):
 
         initial_weights = copy.deepcopy(self.probe.state_dict())
 
-        best_f1 = -1.0
+        best_val_loss = float("inf")
         best_lr = None
         best_state = None
         results = {}
@@ -342,8 +342,8 @@ class LinearProbe(nn.Module):
 
             results[lr] = history
 
-            if history["best_f1"] > best_f1:
-                best_f1 = history["best_f1"]
+            if history["best_val_loss"] < best_val_loss:
+                best_val_loss = history["best_val_loss"]
                 best_lr = lr
                 best_state = copy.deepcopy(history["best_state"])
 
@@ -354,7 +354,7 @@ class LinearProbe(nn.Module):
         checkpoint = {
             "probe_state_dict": best_state,
             "learning_rate": best_lr,
-            "validation_f1": best_f1,
+            "validation_loss": best_val_loss,
             "num_classes": self.num_classes,
             "epochs": self.num_epochs,
             "vision_model": self.model_name,
@@ -368,7 +368,7 @@ class LinearProbe(nn.Module):
         print("\n" + "=" * 60)
         print("Hyperparameter search finished")
         print(f"Best learning rate: {best_lr}")
-        print(f"Best validation loss: {best_f1:.6f}")
+        print(f"Best validation loss: {best_val_loss:.6f}")
         print(f"Checkpoint saved to: {save_path}")
         print("=" * 60)
 
