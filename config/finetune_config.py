@@ -5,7 +5,7 @@ import torch
 
 CONFIG = {
     "image_storage_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/finetune_concept",
-    "result_storage_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/results/linear_probe_metrics",
+    "result_storage_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/results/aro_finetuning",
     "checkpoint_path": "/nethome/tadhopavkar/Concept-aware-vision-encoder/checkpoints",
     "model": "/scratch/common_models/llava-onevision-qwen2-0.5b-si-hf",
     "siglip_model": "/scratch/common_models/siglip-so400m-patch14-384",
