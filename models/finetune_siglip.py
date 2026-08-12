@@ -468,7 +468,13 @@ class FineTuneSiglip(nn.Module):
         best_head_states = None
         best_logit_scale = None
         best_logit_bias = None
+        best_epoch = None
         results = {}
+        save_root, save_extension = os.path.splitext(save_path)
+        if not save_extension:
+            save_extension = ".pt"
+        if os.path.dirname(save_path):
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
         lambda_combinations = itertools.product(*[lambda_values[name] for name in active_heads])
         for combination in lambda_combinations:
@@ -487,6 +493,12 @@ class FineTuneSiglip(nn.Module):
             validation_losses = []
             epochs_without_improvement = 0
             run_best_loss = float("inf")
+            early_stopping_best_loss = float("inf")
+            run_best_vision_state = None
+            run_best_head_states = None
+            run_best_logit_scale = None
+            run_best_logit_bias = None
+            run_best_epoch = None
             self.num_epochs = 1
 
             for epoch in range(original_epochs):
@@ -498,25 +510,50 @@ class FineTuneSiglip(nn.Module):
                 selection_loss = validation_metrics["matching"]
                 print(f"Lambdas: {run_name} | Epoch: {epoch+1}/{original_epochs} | Train Loss: {train_metrics['total']:.4f} | Validation Loss: {validation_metrics['total']:.4f} | Validation Matching Loss: {selection_loss:.4f}")
 
-                if selection_loss < run_best_loss - min_delta:
+                if selection_loss < run_best_loss:
                     run_best_loss = selection_loss
+                    run_best_vision_state = {name: value.detach().cpu().clone() for name, value in self.vision.state_dict().items()}
+                    run_best_head_states = {name: {key: value.detach().cpu().clone() for key, value in getattr(self, f"{name}_bottleneck").state_dict().items()} for name in active_heads}
+                    run_best_logit_scale = self.logit_scale.detach().cpu().clone()
+                    run_best_logit_bias = self.logit_bias.detach().cpu().clone()
+                    run_best_epoch = epoch + 1
+
+                if selection_loss < early_stopping_best_loss - min_delta:
+                    early_stopping_best_loss = selection_loss
                     epochs_without_improvement = 0
                 else:
                     epochs_without_improvement += 1
-
-                if selection_loss < best_validation_loss:
-                    best_validation_loss = selection_loss
-                    best_lambdas = current_lambdas.copy()
-                    best_vision_state = {name: value.detach().cpu().clone() for name, value in self.vision.state_dict().items()}
-                    best_head_states = {name: {key: value.detach().cpu().clone() for key, value in getattr(self, f"{name}_bottleneck").state_dict().items()} for name in active_heads}
-                    best_logit_scale = self.logit_scale.detach().cpu().clone()
-                    best_logit_bias = self.logit_bias.detach().cpu().clone()
 
                 if epochs_without_improvement >= patience:
                     print(f"Early stopping for {run_name}: validation loss did not improve by more than {min_delta} for {patience} epochs.")
                     break
 
-            results[run_name] = {"train_losses": train_losses, "validation_losses": validation_losses, "best_validation_loss": run_best_loss}
+            lambda_suffix = "_".join([f"{name}_{current_lambdas[name]}" for name in active_heads]).replace("/", "_").replace("\\", "_").replace(" ", "")
+            run_checkpoint_path = f"{save_root}_{lambda_suffix}{save_extension}"
+            self.vision.load_state_dict(run_best_vision_state)
+            with torch.no_grad():
+                self.logit_scale.copy_(run_best_logit_scale.to(self.device))
+                self.logit_bias.copy_(run_best_logit_bias.to(self.device))
+            for name in active_heads:
+                getattr(self, f"{name}_bottleneck").load_state_dict(run_best_head_states[name])
+            run_checkpoint = {"vision_state_dict": run_best_vision_state, "logit_scale": run_best_logit_scale, "logit_bias": run_best_logit_bias, "lambdas": current_lambdas.copy(), "validation_matching_loss": run_best_loss, "best_epoch": run_best_epoch, "lora_enabled": self.lora_enabled, "use_qlora": self.use_qlora, "model_name": self.model_name}
+            for name in active_heads:
+                run_checkpoint[f"{name}_bottleneck_state_dict"] = run_best_head_states[name]
+            if self.lora_enabled:
+                run_checkpoint["vision_adapter_path"] = os.path.splitext(run_checkpoint_path)[0] + "_vision_adapter"
+                self.vision.save_pretrained(run_checkpoint["vision_adapter_path"])
+            torch.save(run_checkpoint, run_checkpoint_path)
+
+            results[run_name] = {"train_losses": train_losses, "validation_losses": validation_losses, "best_validation_matching_loss": run_best_loss, "best_epoch": run_best_epoch, "checkpoint_path": run_checkpoint_path}
+
+            if run_best_loss < best_validation_loss:
+                best_validation_loss = run_best_loss
+                best_lambdas = current_lambdas.copy()
+                best_vision_state = run_best_vision_state
+                best_head_states = run_best_head_states
+                best_logit_scale = run_best_logit_scale
+                best_logit_bias = run_best_logit_bias
+                best_epoch = run_best_epoch
 
         self.num_epochs = original_epochs
         self.vision.load_state_dict(best_vision_state)
@@ -526,11 +563,9 @@ class FineTuneSiglip(nn.Module):
         for name in active_heads:
             getattr(self, f"{name}_bottleneck").load_state_dict(best_head_states[name])
             setattr(self, f"lambda_{name}", best_lambdas[name])
-        checkpoint = {"vision_state_dict": best_vision_state, "logit_scale": best_logit_scale, "logit_bias": best_logit_bias, "lambdas": best_lambdas, "validation_loss": best_validation_loss, "lora_enabled": self.lora_enabled, "use_qlora": self.use_qlora, "model_name": self.model_name}
+        checkpoint = {"vision_state_dict": best_vision_state, "logit_scale": best_logit_scale, "logit_bias": best_logit_bias, "lambdas": best_lambdas, "validation_loss": best_validation_loss, "validation_matching_loss": best_validation_loss, "best_epoch": best_epoch, "lora_enabled": self.lora_enabled, "use_qlora": self.use_qlora, "model_name": self.model_name}
         for name in active_heads:
             checkpoint[f"{name}_bottleneck_state_dict"] = best_head_states[name]
-        if os.path.dirname(save_path):
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
         if self.lora_enabled:
             checkpoint["vision_adapter_path"] = os.path.splitext(save_path)[0] + "_vision_adapter"
             self.vision.save_pretrained(checkpoint["vision_adapter_path"])
@@ -550,10 +585,11 @@ class FineTuneSiglip(nn.Module):
         --------------------------------------------------------------------------------------------
         """
         plt.figure(figsize=(8, 5))
-        for lambda_value, history in results.items():
+        for color_idx, (lambda_value, history) in enumerate(results.items()):
             epochs = range(1, len(history["train_losses"]) + 1)
-            plt.plot(epochs, history["train_losses"], label=f"Train lambda={lambda_value}")
-            plt.plot(epochs, history["validation_losses"], linestyle="--", label=f"Validation lambda={lambda_value}")
+            color = f"C{color_idx % 10}"
+            plt.plot(epochs, history["train_losses"], color=color, label=f"Train lambda={lambda_value}")
+            plt.plot(epochs, history["validation_losses"], color=color, linestyle="--", label=f"Validation lambda={lambda_value}")
         plt.xlabel("Epoch")
         plt.ylabel("Loss")
         plt.title("Fine-tuning Training and Validation Curves")
