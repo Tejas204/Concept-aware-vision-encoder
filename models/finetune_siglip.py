@@ -302,8 +302,7 @@ class FineTuneSiglip(nn.Module):
                 text_inputs = self.siglip_processor(text = flat_captions, padding = True, truncation = True, return_tensors = "pt")
                 text_inputs = {k: v.to(self.device) for k, v in text_inputs.items()}
                 with torch.no_grad():
-                    text_outputs = self.siglip_text_encoder(input_ids = text_inputs["input_ids"],
-                                                            attention_mask = text_inputs["attention_mask"])
+                    text_outputs = self.siglip_text_encoder(**text_inputs)
                     text_emb = text_outputs.pooler_output
 
                 # Keep track of captions
