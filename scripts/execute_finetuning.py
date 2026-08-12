@@ -94,7 +94,7 @@ if __name__ == "__main__":
     checkpoint_file = checkpoint_dir / "best_finetuned_siglip.pt"
     plot_file = Path(image_storage_path) / "finetuning_lambda_curves.png"
 
-    results, best_lambdas = fine_tuner.hyperparameter_search(lambda_values={"concept": [0.1, 0.5, 1.0]}, learning_rate=1e-5, patience=3, save_path=str(checkpoint_file), plot_path=str(plot_file))
+    results, best_lambdas = fine_tuner.hyperparameter_search(lambda_values={"concept": [0.0, 0.05, 0.1, 0.3, 0.5, 1.0]}, learning_rate=1e-4, patience=5, save_path=str(checkpoint_file), plot_path=str(plot_file))
     test_metrics = fine_tuner.evaluate_best_model(str(checkpoint_file))
     print(f"Best lambdas: {best_lambdas}")
     print(f"Test metrics: {test_metrics}")

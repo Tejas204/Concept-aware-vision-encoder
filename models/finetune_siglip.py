@@ -349,8 +349,9 @@ class FineTuneSiglip(nn.Module):
                                                           targets=targets)
 
                 self.sanity_checks(stage="shapes", image_emb=pooled_image_feats, text_emb=text_emb, matching_labels=labels, captions_per_image=captions_per_image, logits=logits)
-                print(f"Batch {batch_idx+1} | Images: {tuple(images.shape)} | Image embeddings: {tuple(pooled_image_feats.shape)} | Text embeddings: {tuple(text_emb.shape)} | Labels/Logits: {tuple(labels.shape)}")
-                print(" | ".join([f"{name.capitalize()} Loss: {value.item():.4f}" for name, value in losses.items()]))
+                if batch_idx < 5:
+                    print(f"Batch {batch_idx+1} | Images: {tuple(images.shape)} | Image embeddings: {tuple(pooled_image_feats.shape)} | Text embeddings: {tuple(text_emb.shape)} | Labels/Logits: {tuple(labels.shape)}")
+                    print(" | ".join([f"{name.capitalize()} Loss: {value.item():.4f}" for name, value in losses.items()]))
                 train_loss += total_loss.item()
 
                 optimizer.zero_grad()
@@ -422,7 +423,7 @@ class FineTuneSiglip(nn.Module):
 
         return {name: value / total_images for name, value in running_losses.items()}
 
-    def hyperparameter_search(self, lambda_values, learning_rate=1e-5, patience=3, min_delta=0.001, save_path="checkpoints/best_finetuned_siglip.pt", plot_path=None):
+    def hyperparameter_search(self, lambda_values, learning_rate=1e-5, patience=3, min_delta=1e-3, save_path="checkpoints/best_finetuned_siglip.pt", plot_path=None):
         """
         --------------------------------------------------------------------------------------------
         
