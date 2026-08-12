@@ -36,7 +36,7 @@ if __name__ == "__main__":
         transform=transform,
         split="train"
     )
-    train_loader = training_data.data_loaders(split="train", batch_size=4)
+    train_loader = training_data.data_loaders(split="train", batch_size=8)
     positive_count = torch.zeros(CONFIG["num_concepts"])
     for sample in training_data.samples:
         positive_count += sample["concept_vector"]
@@ -54,7 +54,7 @@ if __name__ == "__main__":
         transform=transform,
         split="valid"
     )
-    validation_loader = validation_data.data_loaders(split="valid", batch_size=4)
+    validation_loader = validation_data.data_loaders(split="valid", batch_size=8)
 
     # -----------------------------------------------------------------------------------
     # Get testing data loader
@@ -67,7 +67,7 @@ if __name__ == "__main__":
         transform=transform,
         split="test"
     )
-    test_loader = testing_data.data_loaders(split="test", batch_size=4)
+    test_loader = testing_data.data_loaders(split="test", batch_size=8)
 
     # -----------------------------------------------------------------------------------
     # Create object of the fine-tuning model and train
