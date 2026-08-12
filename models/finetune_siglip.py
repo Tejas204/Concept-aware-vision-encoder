@@ -83,6 +83,8 @@ class FineTuneSiglip(nn.Module):
             for layer_idx in range(LAYERS_TO_FREEZE, len(self.vision.encoder.layers)):
                 for param in self.vision.encoder.layers[layer_idx].parameters():
                     param.requires_grad = True
+        if not enable_lora and not use_qlora:
+            self.vision.float()
 
         self.layers_to_freeze = LAYERS_TO_FREEZE
         self.vision_layers = self.vision.encoder.layers
@@ -230,6 +232,9 @@ class FineTuneSiglip(nn.Module):
                 assert logits.shape == (batch_size, total_captions)
 
         if stage == "loss":
+            assert torch.isfinite(self.logit_scale), f"Logit scale is NaN or Inf: {self.logit_scale.item()}"
+            assert torch.isfinite(self.logit_bias), f"Logit bias is NaN or Inf: {self.logit_bias.item()}"
+            assert torch.isfinite(logits).all(), "Matching logits contain NaN or Inf."
             for name, loss in losses.items():
                 assert torch.isfinite(loss), f"{name.capitalize()} loss is NaN or Inf: {loss.item()}"
             assert torch.isfinite(total_loss), f"Total loss is NaN or Inf: {total_loss.item()}"
@@ -241,6 +246,7 @@ class FineTuneSiglip(nn.Module):
             assert any(parameter.grad is not None for layer in self.vision_layers[self.layers_to_freeze:] for parameter in layer.parameters() if parameter.requires_grad)
             assert self.logit_scale.grad is not None
             assert self.logit_bias.grad is not None
+            assert all(torch.isfinite(parameter.grad).all() for parameter in self.parameters() if parameter.requires_grad and parameter.grad is not None), "Trainable gradients contain NaN or Inf."
             for name in ["concept_bottleneck", "predicate_bottleneck", "object_bottleneck"]:
                 if hasattr(self, name):
                     assert any(parameter.grad is not None for parameter in getattr(self, name).parameters())
@@ -280,7 +286,7 @@ class FineTuneSiglip(nn.Module):
             losses["object"] = object_loss.detach()
 
         losses["total"] = total_loss.detach()
-        self.sanity_checks(stage="loss", total_loss=total_loss, losses=losses)
+        self.sanity_checks(stage="loss", logits=logits, total_loss=total_loss, losses=losses)
         return total_loss, losses, logits
 
     def forward(self, optimizer):
@@ -344,6 +350,7 @@ class FineTuneSiglip(nn.Module):
                     predictions["object"] = self.object_bottleneck(pooled_image_feats.float())
                     targets["object"] = object_vector
 
+                self.sanity_checks(stage="shapes", image_emb=pooled_image_feats, text_emb=text_emb, matching_labels=labels, captions_per_image=captions_per_image)
 
                 # Compute loss
                 total_loss, losses, logits = self.loss_function(image_emb=pooled_image_feats,
