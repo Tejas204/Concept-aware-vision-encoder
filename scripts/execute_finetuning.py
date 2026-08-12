@@ -37,6 +37,11 @@ if __name__ == "__main__":
         split="train"
     )
     train_loader = training_data.data_loaders(split="train", batch_size=4)
+    positive_count = torch.zeros(CONFIG["num_concepts"])
+    for sample in training_data.samples:
+        positive_count += sample["concept_vector"]
+    negative_count = len(training_data) - positive_count
+    concept_pos_weight = torch.where((positive_count > 0) & (negative_count > 0), negative_count / positive_count.clamp_min(1), torch.ones_like(positive_count)).clamp(max=20.0)
 
     # -----------------------------------------------------------------------------------
     # Get validation data loader
@@ -73,6 +78,7 @@ if __name__ == "__main__":
         val_loader=validation_loader,
         test_loader=test_loader,
         num_epochs=CONFIG["num_epochs"],
+        concept_pos_weight=concept_pos_weight,
         require_concept_bottleneck=True,
         require_object_bottleneck=False,
         require_predicate_bottleneck=False,
@@ -86,7 +92,7 @@ if __name__ == "__main__":
     checkpoint_dir = Path(checkpoint_path)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_file = checkpoint_dir / "best_finetuned_siglip.pt"
-    plot_file = image_storage_path / "finetuning_lambda_curves.png"
+    plot_file = Path(image_storage_path) / "finetuning_lambda_curves.png"
 
     results, best_lambdas = fine_tuner.hyperparameter_search(lambda_values={"concept": [0.1, 0.5, 1.0]}, learning_rate=1e-5, patience=3, save_path=str(checkpoint_file), plot_path=str(plot_file))
     test_metrics = fine_tuner.evaluate_best_model(str(checkpoint_file))

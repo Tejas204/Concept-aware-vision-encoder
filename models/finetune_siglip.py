@@ -95,8 +95,8 @@ class FineTuneSiglip(nn.Module):
         # --------------------------------------------------------------------------------------------
         # SigLip model for text encoding
         # --------------------------------------------------------------------------------------------
-        self.siglip = SiglipModel.from_pretrained(self.siglip_model_name).to(self.device)
-        self.siglip_text_encoder = self.siglip.text_model
+        self.siglip = SiglipModel.from_pretrained(self.siglip_model_name)
+        self.siglip_text_encoder = self.siglip.text_model.to(self.device)
         self.siglip_processor = AutoProcessor.from_pretrained(self.siglip_model_name)
 
         # Freeze text encoder
@@ -108,8 +108,8 @@ class FineTuneSiglip(nn.Module):
         # converts token embeddings to single vector, with scale and bias for the matching loss
         # --------------------------------------------------------------------------------------------
         # self.vision_pooler = self.siglip.vision_model.head
-        self.logit_scale = nn.Parameter(self.siglip.logit_scale.detach().clone())
-        self.logit_bias = nn.Parameter(self.siglip.logit_bias.detach().clone())
+        self.logit_scale = nn.Parameter(self.siglip.logit_scale.detach().clone().to(self.device))
+        self.logit_bias = nn.Parameter(self.siglip.logit_bias.detach().clone().to(self.device))
 
         # Freeze vision pooler, scale and bias
         # for p in self.siglip.vision_model.head.parameters():
@@ -319,7 +319,7 @@ class FineTuneSiglip(nn.Module):
                 labels = torch.where(image_ids == caption_to_image.unsqueeze(0), 1.0, -1.0,)
 
                 # Get vision embeddings
-                outputs = self.vision(pixel_values=images, output_hidden_states=True, return_dict=True)
+                outputs = self.vision(pixel_values=images, output_hidden_states=False, return_dict=True)
 
                 # Pool vision embeddings to get one embedding per image
                 # pooler_dtype = next(self.vision_pooler.parameters()).dtype
@@ -396,7 +396,7 @@ class FineTuneSiglip(nn.Module):
                 image_ids = torch.arange(len(captions_per_image), device=self.device).unsqueeze(1)
                 labels = torch.where(image_ids == caption_to_image.unsqueeze(0), 1.0, -1.0)
 
-                outputs = self.vision(pixel_values=images, output_hidden_states=True, return_dict=True)
+                outputs = self.vision(pixel_values=images, output_hidden_states=False, return_dict=True)
                 # pooler_dtype = next(self.vision_pooler.parameters()).dtype
                 # pooled_image_feats = self.vision_pooler(outputs.last_hidden_state.to(pooler_dtype))
                 pooled_image_feats = outputs.last_hidden_state.mean(dim=1).float()
@@ -422,7 +422,7 @@ class FineTuneSiglip(nn.Module):
 
         return {name: value / total_images for name, value in running_losses.items()}
 
-    def hyperparameter_search(self, lambda_values, learning_rate=1e-5, patience=3, save_path="checkpoints/best_finetuned_siglip.pt", plot_path=None):
+    def hyperparameter_search(self, lambda_values, learning_rate=1e-5, patience=3, min_delta=0.001, save_path="checkpoints/best_finetuned_siglip.pt", plot_path=None):
         """
         --------------------------------------------------------------------------------------------
         
@@ -482,16 +482,17 @@ class FineTuneSiglip(nn.Module):
                 validation_metrics = self.evaluate(self.val_loader)
                 train_losses.append(train_metrics["total"])
                 validation_losses.append(validation_metrics["total"])
-                print(f"Lambdas: {run_name} | Epoch: {epoch+1}/{original_epochs} | Train Loss: {train_metrics['total']:.4f} | Validation Loss: {validation_metrics['total']:.4f}")
+                selection_loss = validation_metrics["matching"]
+                print(f"Lambdas: {run_name} | Epoch: {epoch+1}/{original_epochs} | Train Loss: {train_metrics['total']:.4f} | Validation Loss: {validation_metrics['total']:.4f} | Validation Matching Loss: {selection_loss:.4f}")
 
-                if validation_metrics["total"] < run_best_loss:
-                    run_best_loss = validation_metrics["total"]
+                if selection_loss < run_best_loss - min_delta:
+                    run_best_loss = selection_loss
                     epochs_without_improvement = 0
                 else:
                     epochs_without_improvement += 1
 
-                if validation_metrics["total"] < best_validation_loss:
-                    best_validation_loss = validation_metrics["total"]
+                if selection_loss < best_validation_loss:
+                    best_validation_loss = selection_loss
                     best_lambdas = current_lambdas.copy()
                     best_vision_state = {name: value.detach().cpu().clone() for name, value in self.vision.state_dict().items()}
                     best_head_states = {name: {key: value.detach().cpu().clone() for key, value in getattr(self, f"{name}_bottleneck").state_dict().items()} for name in active_heads}
@@ -499,7 +500,7 @@ class FineTuneSiglip(nn.Module):
                     best_logit_bias = self.logit_bias.detach().cpu().clone()
 
                 if epochs_without_improvement >= patience:
-                    print(f"Early stopping for {run_name}.")
+                    print(f"Early stopping for {run_name}: validation loss did not improve by more than {min_delta} for {patience} epochs.")
                     break
 
             results[run_name] = {"train_losses": train_losses, "validation_losses": validation_losses, "best_validation_loss": run_best_loss}
@@ -525,7 +526,7 @@ class FineTuneSiglip(nn.Module):
         if plot_path is not None:
             self.plot_curves(results, plot_path)
 
-        print(f"Best lambdas: {best_lambdas} | Best validation loss: {best_validation_loss:.4f}")
+        print(f"Best lambdas: {best_lambdas} | Best validation matching loss: {best_validation_loss:.4f}")
         return results, best_lambdas
 
     def plot_curves(self, results, save_path):
