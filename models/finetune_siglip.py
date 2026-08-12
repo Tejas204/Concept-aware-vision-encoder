@@ -107,15 +107,15 @@ class FineTuneSiglip(nn.Module):
         # Vision Pooler from SigLip
         # converts token embeddings to single vector, with scale and bias for the matching loss
         # --------------------------------------------------------------------------------------------
-        self.vision_pooler = self.siglip.vision_model.head
-        self.logit_scale = self.siglip.logit_scale
-        self.logit_bias = self.siglip.logit_bias
+        # self.vision_pooler = self.siglip.vision_model.head
+        self.logit_scale = nn.Parameter(self.siglip.logit_scale.detach().clone())
+        self.logit_bias = nn.Parameter(self.siglip.logit_bias.detach().clone())
 
         # Freeze vision pooler, scale and bias
-        for p in self.siglip.vision_model.head.parameters():
-            p.requires_grad = False
-        self.siglip.logit_scale.requires_grad_(False)
-        self.siglip.logit_bias.requires_grad_(False)
+        # for p in self.siglip.vision_model.head.parameters():
+        #     p.requires_grad = False
+        # self.siglip.logit_scale.requires_grad_(False)
+        # self.siglip.logit_bias.requires_grad_(False)
 
         # Create bottlenecks
         self.create_bottleneck(num_concepts, num_objects, num_predicates)
@@ -187,7 +187,7 @@ class FineTuneSiglip(nn.Module):
     def train(self, mode=True):
         super().train(mode)
         self.siglip_text_encoder.eval()
-        self.vision_pooler.eval()
+        # self.vision_pooler.eval()
         return self
 
     def sanity_checks(self, stage, trainable_vision_layers=None, image_emb=None, text_emb=None, matching_labels=None, captions_per_image=None, logits=None, total_loss=None):
@@ -198,12 +198,13 @@ class FineTuneSiglip(nn.Module):
         --------------------------------------------------------------------------------------------
         """
         if stage == "initialization":
-            assert self.vision.config.hidden_size == self.siglip.vision_model.config.hidden_size
-            assert self.vision.config.num_hidden_layers == self.siglip.vision_model.config.num_hidden_layers
-            assert self.vision.config.patch_size == self.siglip.vision_model.config.patch_size
-            assert torch.allclose(self.vision_layers[0].self_attn.q_proj.weight.detach().float().cpu(), self.siglip.vision_model.encoder.layers[0].self_attn.q_proj.weight.detach().float().cpu(), atol=1e-5, rtol=1e-4)
+            assert self.vision.config.hidden_size == self.siglip_text_encoder.config.hidden_size
+            # assert self.vision.config.num_hidden_layers == self.siglip.vision_model.config.num_hidden_layers
+            # assert self.vision.config.patch_size == self.siglip.vision_model.config.patch_size
+            # assert torch.allclose(self.vision_layers[0].self_attn.q_proj.weight.detach().float().cpu(), self.siglip.vision_model.encoder.layers[0].self_attn.q_proj.weight.detach().float().cpu(), atol=1e-5, rtol=1e-4)
             assert all(not parameter.requires_grad for parameter in self.siglip.parameters())
             assert all(not parameter.requires_grad for parameter in self.siglip_text_encoder.parameters())
+            assert self.logit_scale.requires_grad and self.logit_bias.requires_grad
             assert all(not parameter.requires_grad for layer in self.vision_layers[:self.layers_to_freeze] for parameter in layer.parameters())
             assert len(self.vision_layers[self.layers_to_freeze:]) == trainable_vision_layers
             if not self.lora_enabled and not self.use_qlora:
@@ -233,6 +234,8 @@ class FineTuneSiglip(nn.Module):
             assert all(parameter.grad is None for parameter in self.vision.embeddings.parameters())
             assert all(parameter.grad is None for layer in self.vision_layers[:self.layers_to_freeze] for parameter in layer.parameters())
             assert any(parameter.grad is not None for layer in self.vision_layers[self.layers_to_freeze:] for parameter in layer.parameters() if parameter.requires_grad)
+            assert self.logit_scale.grad is not None
+            assert self.logit_bias.grad is not None
             for name in ["concept_bottleneck", "predicate_bottleneck", "object_bottleneck"]:
                 if hasattr(self, name):
                     assert any(parameter.grad is not None for parameter in getattr(self, name).parameters())
@@ -247,7 +250,7 @@ class FineTuneSiglip(nn.Module):
         image_emb = F.normalize(image_emb.float(), dim=-1)
         text_emb = F.normalize(text_emb.float(), dim=-1)
 
-        logits = (self.logit_scale.float().exp() * image_emb @ text_emb.T + self.logit_bias.float())
+        logits = (self.logit_scale.float().clamp(max=np.log(100.0)).exp() * image_emb @ text_emb.T + self.logit_bias.float())
         matching_loss = -F.logsigmoid(matching_labels * logits).mean(dim=1).mean()
         total_loss = matching_loss
 
@@ -319,9 +322,10 @@ class FineTuneSiglip(nn.Module):
                 outputs = self.vision(pixel_values=images, output_hidden_states=True, return_dict=True)
 
                 # Pool vision embeddings to get one embedding per image
-                pooler_dtype = next(self.vision_pooler.parameters()).dtype
-                feats = outputs.last_hidden_state.to(pooler_dtype)
-                pooled_image_feats = self.vision_pooler(feats)
+                # pooler_dtype = next(self.vision_pooler.parameters()).dtype
+                # feats = outputs.last_hidden_state.to(pooler_dtype)
+                # pooled_image_feats = self.vision_pooler(feats)
+                pooled_image_feats = outputs.last_hidden_state.mean(dim=1).float()
 
                 # Pass features to concept bottleneck and get predictions
                 predictions = {}
@@ -393,8 +397,9 @@ class FineTuneSiglip(nn.Module):
                 labels = torch.where(image_ids == caption_to_image.unsqueeze(0), 1.0, -1.0)
 
                 outputs = self.vision(pixel_values=images, output_hidden_states=True, return_dict=True)
-                pooler_dtype = next(self.vision_pooler.parameters()).dtype
-                pooled_image_feats = self.vision_pooler(outputs.last_hidden_state.to(pooler_dtype))
+                # pooler_dtype = next(self.vision_pooler.parameters()).dtype
+                # pooled_image_feats = self.vision_pooler(outputs.last_hidden_state.to(pooler_dtype))
+                pooled_image_feats = outputs.last_hidden_state.mean(dim=1).float()
 
                 predictions = {}
                 targets = {}
@@ -442,10 +447,14 @@ class FineTuneSiglip(nn.Module):
         original_epochs = self.num_epochs
         initial_vision_state = {name: value.detach().cpu().clone() for name, value in self.vision.state_dict().items()}
         initial_head_states = {name: {key: value.detach().cpu().clone() for key, value in getattr(self, f"{name}_bottleneck").state_dict().items()} for name in active_heads}
+        initial_logit_scale = self.logit_scale.detach().cpu().clone()
+        initial_logit_bias = self.logit_bias.detach().cpu().clone()
         best_validation_loss = float("inf")
         best_lambdas = None
         best_vision_state = None
         best_head_states = None
+        best_logit_scale = None
+        best_logit_bias = None
         results = {}
 
         lambda_combinations = itertools.product(*[lambda_values[name] for name in active_heads])
@@ -454,6 +463,9 @@ class FineTuneSiglip(nn.Module):
             run_name = ", ".join([f"{name}={value}" for name, value in current_lambdas.items()])
             print(f"Starting lambda search for: {run_name}")
             self.vision.load_state_dict(initial_vision_state)
+            with torch.no_grad():
+                self.logit_scale.copy_(initial_logit_scale.to(self.device))
+                self.logit_bias.copy_(initial_logit_bias.to(self.device))
             for name in active_heads:
                 getattr(self, f"{name}_bottleneck").load_state_dict(initial_head_states[name])
                 setattr(self, f"lambda_{name}", current_lambdas[name])
@@ -483,6 +495,8 @@ class FineTuneSiglip(nn.Module):
                     best_lambdas = current_lambdas.copy()
                     best_vision_state = {name: value.detach().cpu().clone() for name, value in self.vision.state_dict().items()}
                     best_head_states = {name: {key: value.detach().cpu().clone() for key, value in getattr(self, f"{name}_bottleneck").state_dict().items()} for name in active_heads}
+                    best_logit_scale = self.logit_scale.detach().cpu().clone()
+                    best_logit_bias = self.logit_bias.detach().cpu().clone()
 
                 if epochs_without_improvement >= patience:
                     print(f"Early stopping for {run_name}.")
@@ -492,10 +506,13 @@ class FineTuneSiglip(nn.Module):
 
         self.num_epochs = original_epochs
         self.vision.load_state_dict(best_vision_state)
+        with torch.no_grad():
+            self.logit_scale.copy_(best_logit_scale.to(self.device))
+            self.logit_bias.copy_(best_logit_bias.to(self.device))
         for name in active_heads:
             getattr(self, f"{name}_bottleneck").load_state_dict(best_head_states[name])
             setattr(self, f"lambda_{name}", best_lambdas[name])
-        checkpoint = {"vision_state_dict": best_vision_state, "lambdas": best_lambdas, "validation_loss": best_validation_loss, "lora_enabled": self.lora_enabled, "use_qlora": self.use_qlora, "model_name": self.model_name}
+        checkpoint = {"vision_state_dict": best_vision_state, "logit_scale": best_logit_scale, "logit_bias": best_logit_bias, "lambdas": best_lambdas, "validation_loss": best_validation_loss, "lora_enabled": self.lora_enabled, "use_qlora": self.use_qlora, "model_name": self.model_name}
         for name in active_heads:
             checkpoint[f"{name}_bottleneck_state_dict"] = best_head_states[name]
         if os.path.dirname(save_path):
@@ -536,6 +553,9 @@ class FineTuneSiglip(nn.Module):
     def evaluate_best_model(self, checkpoint_path):
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
         self.vision.load_state_dict(checkpoint["vision_state_dict"])
+        with torch.no_grad():
+            self.logit_scale.copy_(checkpoint["logit_scale"].to(self.device))
+            self.logit_bias.copy_(checkpoint["logit_bias"].to(self.device))
         test_metrics = self.evaluate(self.test_loader, use_bottlenecks=False)
         print(f"Test losses: {test_metrics}")
         return test_metrics

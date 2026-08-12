@@ -77,18 +77,18 @@ class LinearProbe(nn.Module):
             self.probe.load_state_dict(checkpoint["probe_state_dict"])
 
         # Load SigLip model to use vision pooler. We don't need patch level concepts
-        self.siglip = SiglipModel.from_pretrained(self.siglip_model_name).to(self.device)
-        self.vision_pooler = self.siglip.vision_model.head
-        self.logit_scale = self.siglip.logit_scale
-        self.logit_bias = self.siglip.logit_bias
+        # self.siglip = SiglipModel.from_pretrained(self.siglip_model_name).to(self.device)
+        # self.vision_pooler = self.siglip.vision_model.head
+        # self.logit_scale = self.siglip.logit_scale
+        # self.logit_bias = self.siglip.logit_bias
 
         # Freeze vision pooler, scale and bias
-        for p in self.siglip.vision_model.head.parameters():
-            p.requires_grad = False
-        self.siglip.logit_scale.requires_grad_(False)
-        self.siglip.logit_bias.requires_grad_(False)
+        # for p in self.siglip.vision_model.head.parameters():
+        #     p.requires_grad = False
+        # self.siglip.logit_scale.requires_grad_(False)
+        # self.siglip.logit_bias.requires_grad_(False)
         
-    def fit(self, optimizer, patience=3, plot_path=None):
+    def fit(self, optimizer, patience=3, min_delta=0.0001, plot_path=None):
         if len(self.train_loader) == 0:
             raise ValueError("Training dataloader is empty.")
         
@@ -121,9 +121,9 @@ class LinearProbe(nn.Module):
                     )
 
                     # feats = outputs.last_hidden_state[:, 0].float()
-                    # feats = outputs.last_hidden_state.mean(dim=1).float()
-                    feats = outputs.last_hidden_state[:].float()
-                    pooled_image_feats = self.vision_pooler(feats)
+                    pooled_image_feats = outputs.last_hidden_state.mean(dim=1).float()
+                    # feats = outputs.last_hidden_state[:].float()
+                    # pooled_image_feats = self.vision_pooler(feats)
 
                 logits = self.probe(pooled_image_feats)
 
@@ -156,7 +156,7 @@ class LinearProbe(nn.Module):
             # ------------------------
             # Early stopping
             # ------------------------
-            if val_metrics["f1"] > best_f1:
+            if val_metrics["f1"] > best_f1 + min_delta:
                 best_f1 = val_metrics["f1"]
                 best_state = copy.deepcopy(self.probe.state_dict())
                 epochs_without_improvement = 0
@@ -164,7 +164,7 @@ class LinearProbe(nn.Module):
                 epochs_without_improvement += 1
 
             if epochs_without_improvement >= patience:
-                print("Early stopping.")
+                print(f"Early stopping: validation F1 did not improve by more than {min_delta} for {patience} epochs.")
                 break
 
         if best_state is not None:
@@ -212,8 +212,9 @@ class LinearProbe(nn.Module):
                 )
 
                 # Same feature extraction as training
-                feats = outputs.last_hidden_state[:].float()
-                pooled_image_feats = self.vision_pooler(feats)
+                pooled_image_feats = outputs.last_hidden_state.mean(dim=1).float()
+                # feats = outputs.last_hidden_state[:].float()
+                # pooled_image_feats = self.vision_pooler(feats)
 
                 logits = self.probe(pooled_image_feats)
 
@@ -306,7 +307,9 @@ class LinearProbe(nn.Module):
     def hyperparameter_search(
         self,
         learning_rates,
-        save_path="checkpoints/best_probe.pt"
+        save_path="checkpoints/best_probe.pt",
+        patience=3,
+        min_delta=0.001
     ):
 
         initial_weights = copy.deepcopy(self.probe.state_dict())
@@ -332,7 +335,8 @@ class LinearProbe(nn.Module):
             run_plot_path = f"/nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/{self.type}/train_val_lr_{lr}.png"
             history = self.fit(
                 optimizer=optimizer,
-                patience=3,
+                patience=patience,
+                min_delta=min_delta,
                 plot_path=run_plot_path,
             )
 
