@@ -190,7 +190,7 @@ class FineTuneSiglip(nn.Module):
         # self.vision_pooler.eval()
         return self
 
-    def sanity_checks(self, stage, trainable_vision_layers=None, image_emb=None, text_emb=None, matching_labels=None, captions_per_image=None, logits=None, total_loss=None):
+    def sanity_checks(self, stage, trainable_vision_layers=None, image_emb=None, text_emb=None, matching_labels=None, captions_per_image=None, logits=None, total_loss=None, losses=None):
         """
         --------------------------------------------------------------------------------------------
         Run initialization, shape, loss, and gradient sanity checks from one function.
@@ -218,16 +218,21 @@ class FineTuneSiglip(nn.Module):
         if stage == "shapes":
             batch_size = len(captions_per_image)
             total_captions = sum(len(captions) for captions in captions_per_image)
+            assert torch.isfinite(image_emb).all(), "Image embeddings contain NaN or Inf."
+            assert torch.isfinite(text_emb).all(), "Text embeddings contain NaN or Inf."
             assert image_emb.shape == (batch_size, self.hidden_size)
             assert text_emb.shape == (total_captions, self.hidden_size)
             assert matching_labels.shape == (batch_size, total_captions)
             assert all(len(captions) > 0 for captions in captions_per_image)
             assert matching_labels.eq(1).sum(dim=1).tolist() == [len(captions) for captions in captions_per_image]
             if logits is not None:
+                assert torch.isfinite(logits).all(), "Matching logits contain NaN or Inf."
                 assert logits.shape == (batch_size, total_captions)
 
         if stage == "loss":
-            assert torch.isfinite(total_loss)
+            for name, loss in losses.items():
+                assert torch.isfinite(loss), f"{name.capitalize()} loss is NaN or Inf: {loss.item()}"
+            assert torch.isfinite(total_loss), f"Total loss is NaN or Inf: {total_loss.item()}"
 
         if stage == "gradients":
             assert all(parameter.grad is None for parameter in self.siglip_text_encoder.parameters())
@@ -275,7 +280,7 @@ class FineTuneSiglip(nn.Module):
             losses["object"] = object_loss.detach()
 
         losses["total"] = total_loss.detach()
-        self.sanity_checks(stage="loss", total_loss=total_loss)
+        self.sanity_checks(stage="loss", total_loss=total_loss, losses=losses)
         return total_loss, losses, logits
 
     def forward(self, optimizer):
@@ -356,6 +361,7 @@ class FineTuneSiglip(nn.Module):
                 optimizer.zero_grad()
                 total_loss.backward()
                 self.sanity_checks(stage="gradients")
+                torch.nn.utils.clip_grad_norm_(filter(lambda parameter: parameter.requires_grad, self.parameters()), max_norm=1.0)
                 optimizer.step()
 
             print(
@@ -469,7 +475,7 @@ class FineTuneSiglip(nn.Module):
             for name in active_heads:
                 getattr(self, f"{name}_bottleneck").load_state_dict(initial_head_states[name])
                 setattr(self, f"lambda_{name}", current_lambdas[name])
-            optimizer = torch.optim.AdamW(filter(lambda parameter: parameter.requires_grad, self.parameters()), lr=learning_rate)
+            optimizer = torch.optim.AdamW(filter(lambda parameter: parameter.requires_grad, self.parameters()), lr=learning_rate, eps=1e-6)
             train_losses = []
             validation_losses = []
             epochs_without_improvement = 0
