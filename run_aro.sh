@@ -19,7 +19,7 @@ PY
 
 python evaluate_aro_llava.py \
   --model-id /scratch/common_models/llava-onevision-qwen2-0.5b-si-hf \
-  --vision-checkpoint checkpoints/best_finetuned_siglip_concept_0.0.pt \
+  --vision-checkpoint /nethome/tadhopavkar/Concept-aware-vision-encoder/checkpoints/best_finetuned_siglip_concept_0.0.pt \
   --output-dir /nethome/tadhopavkar/Concept-aware-vision-encoder/results/aro_finetuning/llava-onevision-qwen2-0.5b-si-hf/best_finetuned_siglip_concept_0.0 \
   --generate-visualization \
   --plot-output-dir /nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/aro_finetuning/llava-onevision-qwen2-0.5b-si-hf/best_finetuned_siglip_concept_0.0 \
