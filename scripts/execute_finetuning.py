@@ -85,14 +85,16 @@ if __name__ == "__main__":
         num_concepts=CONFIG["num_concepts"],
         num_objects=CONFIG["num_objects"],
         num_predicates=CONFIG["num_predicates"],
-        enable_lora=False,
+        enable_lora=True,
         use_qlora=False
     )
 
     checkpoint_dir = Path(checkpoint_path)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_file = checkpoint_dir / "best_finetuned_siglip.pt"
-    plot_file = Path(image_storage_path) / "finetuning_lambda_curves.png"
+    tuning_mode = "qlora" if fine_tuner.use_qlora else "lora" if fine_tuner.lora_enabled else "full_finetuning"
+    checkpoint_suffix = f"_{tuning_mode}" if tuning_mode in {"lora", "qlora"} else ""
+    checkpoint_file = checkpoint_dir / f"best_finetuned_siglip{checkpoint_suffix}.pt"
+    plot_file = Path(image_storage_path) / f"finetuning_lambda_curves_{tuning_mode}.png"
 
     results, best_lambdas = fine_tuner.hyperparameter_search(lambda_values={"concept": [0.0, 0.05, 0.1, 0.3, 0.5, 1.0]}, learning_rate=1e-4, patience=5, save_path=str(checkpoint_file), plot_path=str(plot_file))
     test_metrics = fine_tuner.evaluate_best_model(str(checkpoint_file))
