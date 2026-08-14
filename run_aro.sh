@@ -18,11 +18,10 @@ if torch.cuda.is_available():
 PY
 
 python evaluate_aro_llava.py \
-  --model-id /scratch/common_models/llava-onevision-qwen2-0.5b-si-hf \
-  --vision-checkpoint /nethome/tadhopavkar/Concept-aware-vision-encoder/checkpoints/best_finetuned_siglip_concept_0.0.pt \
-  --output-dir /nethome/tadhopavkar/Concept-aware-vision-encoder/results/aro_finetuning/llava-onevision-qwen2-0.5b-si-hf/best_finetuned_siglip_concept_0.0 \
+  --model-id /scratch/common_models/llava-onevision-qwen2-7b-si-hf \
+  --output-dir /nethome/tadhopavkar/Concept-aware-vision-encoder/results/aro_baseline/llava-onevision-qwen2-7b-si-hf \
   --generate-visualization \
-  --plot-output-dir /nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/aro_finetuning/llava-onevision-qwen2-0.5b-si-hf/best_finetuned_siglip_concept_0.0 \
+  --plot-output-dir /nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/aro_baseline/llava-onevision-qwen2-7b-si-hf \
   --seeds 42 123 17
 
 echo "=========================================="
