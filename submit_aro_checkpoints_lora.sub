@@ -1,0 +1,17 @@
+universe = vanilla
+
+initialdir = /nethome/tadhopavkar/Concept-aware-vision-encoder/
+executable = run_aro_checkpoints_lora.sh
+output = /nethome/tadhopavkar/Concept-aware-vision-encoder/logs/aro_finetuning_lora/arockpt_$(ClusterId)_$(ProcId).$(Year)_$(Month)_$(Day)_$(SUBMIT_TIME).out
+error  = /nethome/tadhopavkar/Concept-aware-vision-encoder/logs/aro_finetuning_lora/arockpt_$(ClusterId)_$(ProcId)$(Year)_$(Month)_$(Day)_$(SUBMIT_TIME).err
+log    = /nethome/tadhopavkar/Concept-aware-vision-encoder/logs/aro_finetuning_lora/arockpt_$(ClusterId)$(Year)_$(Month)_$(Day)_$(SUBMIT_TIME).log
+
+request_cpus   = 2
+request_memory = 32GB
+request_gpus   = 1
+
+should_transfer_files = NO
+
+getenv = True
+
+queue 1
