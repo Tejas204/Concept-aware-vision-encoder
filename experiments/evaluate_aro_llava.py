@@ -134,6 +134,14 @@ def parse_args() -> argparse.Namespace:
             "the fixed seed-17 prediction files; do not load or evaluate a model."
         ),
     )
+    p.add_argument(
+        "--plot-wrong-examples",
+        action="store_true",
+        help=(
+            "Only plot examples that the baseline got right but finetuning got "
+            "wrong; do not load or evaluate a model."
+        ),
+    )
     p.add_argument("--generate-visualization", action=argparse.BooleanOptionalAction, default=False)
     p.add_argument("--plot-output-dir", type=Path, default=Path("visualizations/aro_examples"))
     p.add_argument("--device", choices=["auto", "cuda", "mps", "cpu"], default="auto")
@@ -278,8 +286,16 @@ def load_prediction_records(predictions_dir: Path) -> list[dict[str, Any]]:
     ]
 
 
-def plot_prediction_examples(ds: Dataset, output_dir: Path) -> None:
-    """Plot examples fixed by full finetuning and by LoRA, relative to baseline."""
+def _plot_prediction_transitions(
+    ds: Dataset,
+    output_dir: Path,
+    *,
+    baseline_correct: bool,
+    candidate_correct: bool,
+    filename_prefix: str,
+    title: str,
+) -> None:
+    """Plot matched samples whose correctness changes between two runs."""
     baseline_records = load_prediction_records(BASELINE_PREDICTIONS_DIR)
     comparison_runs = {
         "finetuning": load_prediction_records(FINETUNING_PREDICTIONS_DIR),
@@ -304,14 +320,17 @@ def plot_prediction_examples(ds: Dataset, output_dir: Path) -> None:
                     raise ValueError(
                         f"Prediction records do not describe the same sample at index {index}."
                     )
-                if not baseline["correct"] and candidate["correct"]:
+                if (
+                    baseline["correct"] == baseline_correct
+                    and candidate["correct"] == candidate_correct
+                ):
                     selected.append((baseline, candidate))
                 if len(selected) == 2:
                     break
 
             if len(selected) < 2:
                 raise ValueError(
-                    f"Expected 2 baseline-wrong/{run_name}-correct samples for "
+                    f"Expected 2 matching transition samples for {run_name} and "
                     f"{relation!r}, but found {len(selected)}."
                 )
 
@@ -371,14 +390,37 @@ def plot_prediction_examples(ds: Dataset, output_dir: Path) -> None:
                     axis.axis("off")
 
             figure.suptitle(
-                f"{relation.title()}: baseline errors corrected by "
-                f"{run_name.replace('_', ' ')}",
+                f"{relation.title()}: {title.format(run=run_name.replace('_', ' '))}",
                 fontsize=16,
             )
             figure.subplots_adjust(hspace=0.65, wspace=0.15)
-            filename = relation.replace(" ", "_") + ".png"
+            filename = filename_prefix + relation.replace(" ", "_") + ".png"
             figure.savefig(run_output_dir / filename, dpi=180, bbox_inches="tight")
             plt.close(figure)
+
+
+def plot_prediction_examples(ds: Dataset, output_dir: Path) -> None:
+    """Plot examples fixed by full finetuning and by LoRA, relative to baseline."""
+    _plot_prediction_transitions(
+        ds,
+        output_dir,
+        baseline_correct=False,
+        candidate_correct=True,
+        filename_prefix="",
+        title="baseline errors corrected by {run}",
+    )
+
+
+def plot_wrong_prediction_examples(ds: Dataset, output_dir: Path) -> None:
+    """Plot baseline-correct examples made wrong by full finetuning and LoRA."""
+    _plot_prediction_transitions(
+        ds,
+        output_dir,
+        baseline_correct=True,
+        candidate_correct=False,
+        filename_prefix="wrong_",
+        title="baseline successes made wrong by {run}",
+    )
 
 
 def load_vision_adapter(model: LlavaOnevisionForConditionalGeneration, path: Path) -> None:
@@ -413,10 +455,13 @@ def load_vision_checkpoint(model: LlavaOnevisionForConditionalGeneration, path: 
 def main() -> None:
     args = parse_args()
 
-    if args.plot_examples:
+    if args.plot_examples or args.plot_wrong_examples:
         random.seed(17)
         ds = prepare_dataset(args)
-        plot_prediction_examples(ds, QUALITATIVE_RESULTS_DIR)
+        if args.plot_examples:
+            plot_prediction_examples(ds, QUALITATIVE_RESULTS_DIR)
+        if args.plot_wrong_examples:
+            plot_wrong_prediction_examples(ds, QUALITATIVE_RESULTS_DIR)
         print(f"Saved qualitative comparisons to {QUALITATIVE_RESULTS_DIR}")
         return
 
