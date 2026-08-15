@@ -294,6 +294,7 @@ def _plot_prediction_transitions(
     candidate_correct: bool,
     filename_prefix: str,
     title: str,
+    excluded_indices_by_relation: dict[str, set[int]] | None = None,
 ) -> None:
     """Plot matched samples whose correctness changes between two runs."""
     baseline_records = load_prediction_records(BASELINE_PREDICTIONS_DIR)
@@ -311,7 +312,12 @@ def _plot_prediction_transitions(
 
         for relation in sorted(DEFAULT_SPATIAL_RELATIONS):
             selected: list[tuple[dict[str, Any], dict[str, Any]]] = []
+            excluded_indices = (
+                excluded_indices_by_relation or {}
+            ).get(relation, set())
             for index, baseline in baseline_by_index.items():
+                if index in excluded_indices:
+                    continue
                 candidate = candidate_by_index.get(index)
                 if candidate is None or normalize_relation(baseline["relation"]) != relation:
                     continue
@@ -420,6 +426,7 @@ def plot_wrong_prediction_examples(ds: Dataset, output_dir: Path) -> None:
         candidate_correct=False,
         filename_prefix="wrong_",
         title="baseline successes made wrong by {run}",
+        excluded_indices_by_relation={"in": {265}},
     )
 
 
