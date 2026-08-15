@@ -1,24 +1,6 @@
 #!/usr/bin/env python3
 """Evaluate LLaVA-OneVision on spatial ARO relations.
 
-Examples
---------
-# Quick smoke test
-python evaluate_aro_llava.py \
-  --model-id llava-hf/llava-onevision-qwen2-0.5b-ov-hf \
-  --max-samples 100
-
-# Baseline experiment
-python evaluate_aro_llava.py \
-  --model-id llava-hf/llava-onevision-qwen2-7b-ov-hf \
-  --output-dir results/aro_baseline
-
-# Same evaluation with a locally saved PEFT adapter for the vision encoder
-python evaluate_aro_llava.py \
-  --model-id llava-hf/llava-onevision-qwen2-7b-ov-hf \
-  --vision-adapter checkpoints/vision_adapter \
-  --output-dir results/aro_finetuned
-
 ---------------------------------------------------------
 # Original model
 python experiments/evaluate_aro_llava.py --model-id MODEL
