@@ -24,9 +24,27 @@ class FineTuneSiglip(nn.Module):
 
         Args:
             model (str): Hugging Face model identifier or path to a pretrained model.
+            train_loader: Dataloader used for training.
+            val_loader: Dataloader used for validation.
+            test_loader: Dataloader used for final testing.
+            num_epochs (int): Maximum number of training epochs.
+            siglip_model (str): Hugging Face identifier for the SigLIP text encoder.
             require_object_bottleneck (bool): Whether to enable the object bottleneck head.
             require_concept_bottleneck (bool): Whether to enable the concept bottleneck head.
             require_predicate_bottleneck (bool): Whether to enable the predicate bottleneck head.
+            lambda_concept (float): Weight applied to concept loss.
+            lambda_object (float): Weight applied to object loss.
+            lambda_predicate (float): Weight applied to predicate loss.
+            concept_pos_weight: Optional positive-class weights for concept BCE loss.
+            trainable_vision_layers (int): Number of final vision layers to train.
+            enable_lora (bool): Whether to attach LoRA adapters.
+            use_qlora (bool): Whether to use quantized LoRA training.
+            num_concepts (int): Number of concept output labels.
+            num_objects (int): Number of object output labels.
+            num_predicates (int): Number of predicate output labels.
+
+        Returns:
+            None.
 
         --------------------------------------------------------------------------------------------
         """
@@ -143,6 +161,11 @@ class FineTuneSiglip(nn.Module):
         3,000, and 18 logits, respectively. A head is created only when its corresponding
         ``require_*_bottleneck`` flag is enabled.
 
+        Args:
+            num_concepts: Number of outputs for the concept head.
+            num_objects: Number of outputs for the object head.
+            num_predicates: Number of outputs for the predicate head.
+
         Returns:
             None
 
@@ -167,6 +190,16 @@ class FineTuneSiglip(nn.Module):
         """
         --------------------------------------------------------------------------------------------
         Optionally add LoRA/QLoRA adapters to the later vision encoder layers.
+
+        Args:
+            enable: Whether adapter configuration should be applied.
+            use_qlora: Whether to prepare the vision tower for quantized training.
+            rank: LoRA decomposition rank.
+            alpha: LoRA scaling factor.
+            dropout: Dropout probability applied inside LoRA adapters.
+
+        Returns:
+            None.
 
         --------------------------------------------------------------------------------------------
         """
@@ -196,6 +229,20 @@ class FineTuneSiglip(nn.Module):
         """
         --------------------------------------------------------------------------------------------
         Run initialization, shape, loss, and gradient sanity checks from one function.
+
+        Args:
+            stage: Check group to run: initialization, shapes, loss, or gradients.
+            trainable_vision_layers: Expected number of trainable vision layers.
+            image_emb: Batched image embeddings for shape checks.
+            text_emb: Batched text embeddings for shape checks.
+            matching_labels: Image-caption matching label matrix.
+            captions_per_image: Caption lists associated with each image.
+            logits: Matching logits checked for shape and finite values.
+            total_loss: Combined loss checked for finite values.
+            losses: Named component losses checked for finite values.
+
+        Returns:
+            None.
 
         --------------------------------------------------------------------------------------------
         """
@@ -254,7 +301,18 @@ class FineTuneSiglip(nn.Module):
     def loss_function(self, image_emb, text_emb, matching_labels, predictions, targets, use_bottlenecks=True):
         """
         --------------------------------------------------------------------------------------------
+        Compute SigLIP image-text matching loss and optional bottleneck losses.
 
+        Args:
+            image_emb: Pooled image embeddings.
+            text_emb: Pooled caption embeddings.
+            matching_labels: Matrix containing positive and negative image-caption labels.
+            predictions: Bottleneck logits keyed by supervision type.
+            targets: Bottleneck targets keyed by supervision type.
+            use_bottlenecks: Whether enabled bottleneck losses should be included.
+
+        Returns:
+            A tuple of total loss, detached component losses, and matching logits.
         --------------------------------------------------------------------------------------------
         """
         # SigLIP matching loss
@@ -292,7 +350,13 @@ class FineTuneSiglip(nn.Module):
     def forward(self, optimizer):
         """
         --------------------------------------------------------------------------------------------
+        Train the vision tower and enabled bottleneck heads for the configured epochs.
 
+        Args:
+            optimizer: Optimizer used to update trainable parameters.
+
+        Returns:
+            None.
         --------------------------------------------------------------------------------------------
         """
         if len(self.train_loader) == 0:
@@ -379,8 +443,14 @@ class FineTuneSiglip(nn.Module):
     def evaluate(self, loader, use_bottlenecks=True):
         """
         --------------------------------------------------------------------------------------------
-        
+        Evaluate matching and optional bottleneck losses over a dataloader.
 
+        Args:
+            loader: Dataloader to evaluate.
+            use_bottlenecks: Whether enabled bottleneck losses should be computed.
+
+        Returns:
+            Average loss values keyed by loss component.
         --------------------------------------------------------------------------------------------
         """
         if len(loader) == 0:
@@ -438,8 +508,18 @@ class FineTuneSiglip(nn.Module):
     def hyperparameter_search(self, lambda_values, learning_rate=1e-5, patience=3, min_delta=1e-3, save_path="checkpoints/best_finetuned_siglip.pt", plot_path=None):
         """
         --------------------------------------------------------------------------------------------
-        
+        Search bottleneck-loss weights and save the best vision checkpoint or adapter.
 
+        Args:
+            lambda_values: Candidate weights per active bottleneck, or concept weights.
+            learning_rate: Optimizer learning rate used for every search run.
+            patience: Epochs without improvement before early stopping.
+            min_delta: Minimum matching-loss decrease considered an improvement.
+            save_path: Destination for the overall best checkpoint.
+            plot_path: Optional destination for search loss curves.
+
+        Returns:
+            A tuple containing histories for all runs and the best bottleneck weights.
         --------------------------------------------------------------------------------------------
         """
         if not lambda_values:
@@ -580,8 +660,14 @@ class FineTuneSiglip(nn.Module):
     def plot_curves(self, results, save_path):
         """
         --------------------------------------------------------------------------------------------
-        
+        Plot training and validation losses for every lambda search run.
 
+        Args:
+            results: Search histories keyed by lambda configuration.
+            save_path: Destination for the generated figure.
+
+        Returns:
+            None.
         --------------------------------------------------------------------------------------------
         """
         plt.figure(figsize=(8, 5))
@@ -601,6 +687,17 @@ class FineTuneSiglip(nn.Module):
         plt.close()
 
     def evaluate_best_model(self, checkpoint_path):
+        """
+        --------------------------------------------------------------------------------------------
+        Load the best vision checkpoint and evaluate it on the test dataloader.
+
+        Args:
+            checkpoint_path: Path to the saved fine-tuning checkpoint.
+
+        Returns:
+            Average test losses keyed by loss component.
+        --------------------------------------------------------------------------------------------
+        """
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
         self.vision.load_state_dict(checkpoint["vision_state_dict"])
         with torch.no_grad():

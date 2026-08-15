@@ -76,19 +76,22 @@ class LinearProbe(nn.Module):
             checkpoint = torch.load(probe_checkpoint, map_location=self.device)
             self.probe.load_state_dict(checkpoint["probe_state_dict"])
 
-        # Load SigLip model to use vision pooler. We don't need patch level concepts
-        # self.siglip = SiglipModel.from_pretrained(self.siglip_model_name).to(self.device)
-        # self.vision_pooler = self.siglip.vision_model.head
-        # self.logit_scale = self.siglip.logit_scale
-        # self.logit_bias = self.siglip.logit_bias
-
-        # Freeze vision pooler, scale and bias
-        # for p in self.siglip.vision_model.head.parameters():
-        #     p.requires_grad = False
-        # self.siglip.logit_scale.requires_grad_(False)
-        # self.siglip.logit_bias.requires_grad_(False)
         
     def fit(self, optimizer, patience=4, min_delta=0.001, plot_path=None):
+        """
+        --------------------------------------------------------------------------------------------
+        Train the linear probe with validation-based early stopping.
+
+        Args:
+            optimizer: Optimizer used to update probe parameters.
+            patience: Epochs without sufficient improvement before stopping.
+            min_delta: Minimum validation-loss decrease considered an improvement.
+            plot_path: Optional path for the training and validation loss plot.
+
+        Returns:
+            Training history containing losses, best validation loss, and best state.
+        --------------------------------------------------------------------------------------------
+        """
         if len(self.train_loader) == 0:
             raise ValueError("Training dataloader is empty.")
         
@@ -101,9 +104,7 @@ class LinearProbe(nn.Module):
 
         for epoch in range(self.num_epochs):
 
-            # ------------------------
             # Training
-            # ------------------------
             self.probe.train()
             self.vision.eval()
 
@@ -138,9 +139,7 @@ class LinearProbe(nn.Module):
             train_loss = running_train_loss / len(self.train_loader)
             train_losses.append(train_loss)
 
-            # ------------------------
             # Validation
-            # ------------------------
             val_metrics = self.evaluate(self.val_loader)
 
             val_losses.append(val_metrics["loss"])
@@ -153,9 +152,7 @@ class LinearProbe(nn.Module):
                 f"Sample Acc: {val_metrics['sample_accuracy']:.4f}"
             )
 
-            # ------------------------
             # Early stopping
-            # ------------------------
             if val_metrics["loss"] < best_val_loss - min_delta:
                 best_val_loss = val_metrics["loss"]
                 best_state = copy.deepcopy(self.probe.state_dict())
@@ -187,6 +184,17 @@ class LinearProbe(nn.Module):
         }
 
     def evaluate(self, loader):
+        """
+        --------------------------------------------------------------------------------------------
+        Evaluate the probe and compute aggregate and per-concept metrics.
+
+        Args:
+            loader: Dataloader to evaluate.
+
+        Returns:
+            A dictionary containing loss, accuracy, precision, recall, and F1 metrics.
+        --------------------------------------------------------------------------------------------
+        """
         if len(loader) == 0:
             raise ValueError("Evaluation dataloader is empty.")
         
@@ -311,6 +319,20 @@ class LinearProbe(nn.Module):
         patience=4,
         min_delta=0.001
     ):
+        """
+        --------------------------------------------------------------------------------------------
+        Train the probe across learning rates and save the best checkpoint.
+
+        Args:
+            learning_rates: Learning rates to evaluate.
+            save_path: Destination for the best probe checkpoint.
+            patience: Early-stopping patience used for each run.
+            min_delta: Minimum validation-loss improvement used for early stopping.
+
+        Returns:
+            A tuple containing histories keyed by learning rate and the best rate.
+        --------------------------------------------------------------------------------------------
+        """
 
         initial_weights = copy.deepcopy(self.probe.state_dict())
 
@@ -376,6 +398,20 @@ class LinearProbe(nn.Module):
 
 
     def plot_curves(self, train_losses, val_losses, save_path=None, title="Training and Validation Curves"):
+        """
+        --------------------------------------------------------------------------------------------
+        Plot training and validation losses over epochs.
+
+        Args:
+            train_losses: Training loss for each epoch.
+            val_losses: Validation loss for each epoch.
+            save_path: Optional destination for the figure.
+            title: Figure title.
+
+        Returns:
+            None.
+        --------------------------------------------------------------------------------------------
+        """
         plt.figure(figsize=(8, 5))
 
         plt.plot(range(1, len(train_losses) + 1), train_losses, label="Training Loss", color="blue")

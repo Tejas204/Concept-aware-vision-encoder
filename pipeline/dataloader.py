@@ -71,13 +71,29 @@ class SpatialSenseDataset(Dataset):
 
     def __len__(self):
         """
-        
+        --------------------------------------------------------------------------------------------
+        Return the number of samples available in the selected dataset split.
+
+        Args:
+            None.
+
+        Returns:
+            Number of samples in the dataset.
+        --------------------------------------------------------------------------------------------
         """
         return len(self.samples)
     
     def __getitem__(self, index):
         """
-        
+        --------------------------------------------------------------------------------------------
+        Load and transform one image and its target vector.
+
+        Args:
+            index: Zero-based sample index.
+
+        Returns:
+            A dictionary containing the image, concept vector, and optional caption.
+        --------------------------------------------------------------------------------------------
         """
         sample = self.samples[index]
 
@@ -99,14 +115,18 @@ class SpatialSenseDataset(Dataset):
 
     def data_loaders(self, split="train", batch_size=4, num_workers=0):
         """
+        --------------------------------------------------------------------------------------------
         Create a DataLoader for the given dataset.
 
         Args:
-            dataset: The dataset to create a loader for.
-            type (str): The type of loader ('train' or 'test'), determines if shuffling is enabled.
+            split: Loader split name; training loaders are shuffled.
+            batch_size: Number of samples per batch.
+            num_workers: Number of worker processes used for loading.
 
         Returns:
             DataLoader: A PyTorch DataLoader for the dataset.
+
+        --------------------------------------------------------------------------------------------
         """
 
         shuffle = True if split == "train" else False
@@ -116,11 +136,17 @@ class SpatialSenseDataset(Dataset):
     
     def visualize_images(self, storage_path=None, max_images=9):
         """
+        --------------------------------------------------------------------------------------------
         Visualize up to `max_images` random samples from this dataset.
         
         Args:
             storage_path (str, optional): If provided, save the figure here.
             max_images (int): Maximum number of images to display.
+
+        Returns:
+            None.
+
+        --------------------------------------------------------------------------------------------
         """
         n = min(max_images, len(self))
         if n == 0:

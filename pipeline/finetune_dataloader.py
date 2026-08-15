@@ -10,7 +10,17 @@ from torchvision import transforms
 
 
 def finetune_collate_fn(batch):
-    """Stack fixed-size tensors and preserve variable-length caption lists."""
+    """
+    --------------------------------------------------------------------------------------------
+    Stack fixed-size tensors and preserve variable-length caption lists.
+
+    Args:
+        batch: Sequence of fine-tuning samples to combine.
+
+    Returns:
+        A batch dictionary containing stacked tensors and per-image caption lists.
+    --------------------------------------------------------------------------------------------
+    """
     if not batch:
         raise ValueError("Cannot collate an empty batch.")
     captions = [sample["captions"] for sample in batch]
@@ -94,13 +104,29 @@ class FineTuneLoader(Dataset):
 
     def __len__(self):
         """
-        
+        --------------------------------------------------------------------------------------------
+        Return the number of fine-tuning samples in the selected split.
+
+        Args:
+            None.
+
+        Returns:
+            Number of samples in the dataset.
+        --------------------------------------------------------------------------------------------
         """
         return len(self.samples)
     
     def __getitem__(self, index):
         """
-        
+        --------------------------------------------------------------------------------------------
+        Load and transform one image with all of its supervision targets.
+
+        Args:
+            index: Zero-based sample index.
+
+        Returns:
+            A dictionary containing the image, target vectors, and captions.
+        --------------------------------------------------------------------------------------------
         """
         sample = self.samples[index]
 
@@ -126,14 +152,18 @@ class FineTuneLoader(Dataset):
 
     def data_loaders(self, split="train", batch_size=4, num_workers=0):
         """
+        --------------------------------------------------------------------------------------------
         Create a DataLoader for the given dataset.
 
         Args:
-            dataset: The dataset to create a loader for.
-            type (str): The type of loader ('train' or 'test'), determines if shuffling is enabled.
+            split: Loader split name; training loaders are shuffled.
+            batch_size: Number of samples per batch.
+            num_workers: Number of worker processes used for loading.
 
         Returns:
             DataLoader: A PyTorch DataLoader for the dataset.
+
+        --------------------------------------------------------------------------------------------
         """
 
         shuffle = True if split == "train" else False

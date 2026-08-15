@@ -150,6 +150,18 @@ def parse_args() -> argparse.Namespace:
 
 
 def choose_device(name: str) -> torch.device:
+    """
+    --------------------------------------------------------------------------------------------
+    Resolve a requested device name, automatically preferring CUDA, then MPS, then CPU.
+
+    Args:
+        name: Explicit device name or ``"auto"``.
+
+    Returns:
+        The resolved PyTorch device.
+
+    --------------------------------------------------------------------------------------------
+    """
     if name != "auto":
         return torch.device(name)
     if torch.cuda.is_available():
@@ -160,6 +172,18 @@ def choose_device(name: str) -> torch.device:
 
 
 def choose_dtype(name: str, device: torch.device) -> torch.dtype:
+    """
+    --------------------------------------------------------------------------------------------
+    Resolve the requested tensor dtype, choosing float16 on accelerators in auto mode.
+
+    Args:
+        name: Explicit dtype name or ``"auto"``.
+        device: Device on which inference will run.
+
+    Returns:
+        The resolved PyTorch dtype.
+    --------------------------------------------------------------------------------------------
+    """
     if name != "auto":
         return getattr(torch, name)
     if device.type in {"cuda", "mps"}:
@@ -168,10 +192,33 @@ def choose_dtype(name: str, device: torch.device) -> torch.dtype:
 
 
 def normalize_relation(value: Any) -> str:
+    """
+    --------------------------------------------------------------------------------------------
+    Normalize a relation label by lowercasing it and standardizing whitespace and underscores.
+
+    Args:
+        value: Relation value to normalize.
+
+    Returns:
+        The normalized relation string.
+    --------------------------------------------------------------------------------------------
+    """
     return " ".join(str(value).strip().lower().replace("_", " ").split())
 
 
 def get_field(example: dict[str, Any], candidates: tuple[str, ...]) -> Any:
+    """
+    --------------------------------------------------------------------------------------------
+    Retrieve the first available field from a sequence of candidate names.
+
+    Args:
+        example: Dataset example containing named fields.
+        candidates: Field names in lookup-priority order.
+
+    Returns:
+        The value associated with the first matching field.
+    --------------------------------------------------------------------------------------------
+    """
     for key in candidates:
         if key in example:
             return example[key]
@@ -179,10 +226,32 @@ def get_field(example: dict[str, Any], candidates: tuple[str, ...]) -> Any:
 
 
 def relation_of(example: dict[str, Any]) -> str:
+    """
+    --------------------------------------------------------------------------------------------
+    Extract and normalize the relation label from a dataset example.
+
+    Args:
+        example: Dataset example containing a relation field.
+
+    Returns:
+        The normalized relation label.
+    --------------------------------------------------------------------------------------------
+    """
     return normalize_relation(get_field(example, ("relation_name", "relation", "predicate")))
 
 
 def calculate_spatial_frequency(ds):
+    """
+    --------------------------------------------------------------------------------------------
+    Count examples for each configured spatial relation and sort by frequency.
+
+    Args:
+        ds: Iterable dataset of ARO examples.
+
+    Returns:
+        A mapping from spatial relation to example count.
+    --------------------------------------------------------------------------------------------
+    """
     counts: dict[str, int] = {relation: 0 for relation in DEFAULT_SPATIAL_RELATIONS}
     for row in ds:
         relation = relation_of(row)
@@ -192,6 +261,18 @@ def calculate_spatial_frequency(ds):
 
 
 def sample_dataset_rows(ds, min_freq):
+    """
+    --------------------------------------------------------------------------------------------
+    Randomly sample an equal number of rows for every spatial relation.
+
+    Args:
+        ds: Dataset containing the configured spatial relations.
+        min_freq: Number of examples to sample per relation.
+
+    Returns:
+        A concatenated dataset balanced across relations.
+    --------------------------------------------------------------------------------------------
+    """
     # Based on min_freq, for each spatial relation, randomly sample min_freq rows
     # Create the randomly sampled dataset and return it.
     sampled_datasets = []
@@ -206,6 +287,17 @@ def sample_dataset_rows(ds, min_freq):
     return concatenate_datasets(sampled_datasets)
 
 def prepare_dataset(args: argparse.Namespace) -> Dataset:
+    """
+    --------------------------------------------------------------------------------------------
+    Load, filter, balance, and optionally truncate the requested ARO dataset split.
+
+    Args:
+        args: Parsed command-line arguments describing the dataset and sample limit.
+
+    Returns:
+        The prepared spatial-relation dataset.
+    --------------------------------------------------------------------------------------------
+    """
     ds = load_dataset(args.dataset_id, split=args.split)
     if args.list_relations:
         counts: dict[str, int] = defaultdict(int)
@@ -239,6 +331,19 @@ def collate(examples: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def make_prompt(processor: AutoProcessor, caption_a: str, caption_b: str) -> str:
+    """
+    --------------------------------------------------------------------------------------------
+    Build a chat-formatted image question asking the model to choose between two captions.
+
+    Args:
+        processor: Processor used to apply the model's chat template.
+        caption_a: Caption presented as option A.
+        caption_b: Caption presented as option B.
+
+    Returns:
+        The formatted generation prompt.
+    --------------------------------------------------------------------------------------------
+    """
     question = (
         "Which caption correctly describes the image?\n"
         f"A. {caption_a}\n"
@@ -253,6 +358,18 @@ def make_prompt(processor: AutoProcessor, caption_a: str, caption_b: str) -> str
 
 
 def answer_token_id(processor: AutoProcessor, answer: str) -> int:
+    """
+    --------------------------------------------------------------------------------------------
+    Convert a single-token answer label into its tokenizer ID.
+
+    Args:
+        processor: Processor providing the tokenizer.
+        answer: Answer label, normally ``"A"`` or ``"B"``.
+
+    Returns:
+        The token ID for the answer label.
+    --------------------------------------------------------------------------------------------
+    """
     # The chat prompt ends immediately after the assistant marker.  For Qwen2,
     # A/B are one token each. Validate this because multi-token labels require
     # sequence-level scoring, not the one-forward-pass method used here.
@@ -263,6 +380,17 @@ def answer_token_id(processor: AutoProcessor, answer: str) -> int:
 
 
 def image_of(row: dict[str, Any]) -> Image.Image:
+    """
+    --------------------------------------------------------------------------------------------
+    Extract an image from a dataset row and convert it to RGB.
+
+    Args:
+        row: Dataset row containing an image field.
+
+    Returns:
+        The image as an RGB PIL image.
+    --------------------------------------------------------------------------------------------
+    """
     image = get_field(row, ("image", "images"))
     if not isinstance(image, Image.Image):
         raise TypeError(f"Expected a PIL image, received {type(image).__name__}")
@@ -270,12 +398,34 @@ def image_of(row: dict[str, Any]) -> Image.Image:
 
 
 def captions_of(row: dict[str, Any]) -> tuple[str, str]:
+    """
+    --------------------------------------------------------------------------------------------
+    Extract the positive and negative captions from a dataset row.
+
+    Args:
+        row: Dataset row containing caption fields.
+
+    Returns:
+        A tuple containing the true caption followed by the false caption.
+    --------------------------------------------------------------------------------------------
+    """
     true_caption = str(get_field(row, ("true_caption", "caption", "positive_caption")))
     false_caption = str(get_field(row, ("false_caption", "negative_caption")))
     return true_caption, false_caption
 
 
 def load_prediction_records(predictions_dir: Path) -> list[dict[str, Any]]:
+    """
+    --------------------------------------------------------------------------------------------
+    Read prediction records from ``predictions.jsonl`` in a result directory.
+
+    Args:
+        predictions_dir: Directory containing the predictions file.
+
+    Returns:
+        Parsed prediction dictionaries in file order.
+    --------------------------------------------------------------------------------------------
+    """
     predictions_path = predictions_dir / "predictions.jsonl"
     if not predictions_path.is_file():
         raise FileNotFoundError(f"{predictions_path} was not found.")
@@ -296,7 +446,23 @@ def _plot_prediction_transitions(
     title: str,
     excluded_indices_by_relation: dict[str, set[int]] | None = None,
 ) -> None:
-    """Plot matched samples whose correctness changes between two runs."""
+    """
+    --------------------------------------------------------------------------------------------
+    Plot matched samples whose correctness changes between baseline and fine-tuned runs.
+
+    Args:
+        ds: Dataset used to recover images for prediction indices.
+        output_dir: Root directory in which comparison figures are saved.
+        baseline_correct: Required correctness value for the baseline record.
+        candidate_correct: Required correctness value for the fine-tuned record.
+        filename_prefix: Prefix added to every output filename.
+        title: Figure-title template containing a ``{run}`` placeholder.
+        excluded_indices_by_relation: Optional sample indices to skip per relation.
+
+    Returns:
+        None.
+    --------------------------------------------------------------------------------------------
+    """
     baseline_records = load_prediction_records(BASELINE_PREDICTIONS_DIR)
     comparison_runs = {
         "finetuning": load_prediction_records(FINETUNING_PREDICTIONS_DIR),
@@ -406,7 +572,18 @@ def _plot_prediction_transitions(
 
 
 def plot_prediction_examples(ds: Dataset, output_dir: Path) -> None:
-    """Plot examples fixed by full finetuning and by LoRA, relative to baseline."""
+    """
+    --------------------------------------------------------------------------------------------
+    Plot examples fixed by full finetuning and by LoRA, relative to baseline.
+
+    Args:
+        ds: Dataset used to recover images for prediction indices.
+        output_dir: Root directory in which comparison figures are saved.
+
+    Returns:
+        None.
+    --------------------------------------------------------------------------------------------
+    """
     _plot_prediction_transitions(
         ds,
         output_dir,
@@ -418,7 +595,18 @@ def plot_prediction_examples(ds: Dataset, output_dir: Path) -> None:
 
 
 def plot_wrong_prediction_examples(ds: Dataset, output_dir: Path) -> None:
-    """Plot baseline-correct examples made wrong by full finetuning and LoRA."""
+    """
+    --------------------------------------------------------------------------------------------
+    Plot baseline-correct examples made wrong by full finetuning and LoRA.
+
+    Args:
+        ds: Dataset used to recover images for prediction indices.
+        output_dir: Root directory in which comparison figures are saved.
+
+    Returns:
+        None.
+    --------------------------------------------------------------------------------------------
+    """
     _plot_prediction_transitions(
         ds,
         output_dir,
@@ -431,7 +619,18 @@ def plot_wrong_prediction_examples(ds: Dataset, output_dir: Path) -> None:
 
 
 def load_vision_adapter(model: LlavaOnevisionForConditionalGeneration, path: Path) -> None:
-    """Attach a local PEFT adapter to LLaVA's vision tower for this process only."""
+    """
+    --------------------------------------------------------------------------------------------
+    Attach a local PEFT adapter to LLaVA's vision tower for this process only.
+
+    Args:
+        model: LLaVA model whose vision tower receives the adapter.
+        path: Directory containing the saved PEFT adapter.
+
+    Returns:
+        None.
+    --------------------------------------------------------------------------------------------
+    """
     config_path = path / "adapter_config.json"
     if not config_path.is_file():
         raise FileNotFoundError(
@@ -454,6 +653,18 @@ def load_vision_adapter(model: LlavaOnevisionForConditionalGeneration, path: Pat
 
 
 def load_vision_checkpoint(model: LlavaOnevisionForConditionalGeneration, path: Path) -> None:
+    """
+    --------------------------------------------------------------------------------------------
+    Load a saved vision-tower state dictionary into a LLaVA model.
+
+    Args:
+        model: LLaVA model whose vision tower is updated.
+        path: Path to the checkpoint file.
+
+    Returns:
+        None.
+    --------------------------------------------------------------------------------------------
+    """
     checkpoint = torch.load(path, map_location="cpu")
     model.model.vision_tower.load_state_dict(checkpoint["vision_state_dict"])
     print(f"Loaded vision checkpoint from {path}")

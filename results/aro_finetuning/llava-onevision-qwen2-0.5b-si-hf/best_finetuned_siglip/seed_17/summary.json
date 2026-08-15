@@ -1,0 +1,70 @@
+{
+  "model_id": "/scratch/common_models/llava-onevision-qwen2-0.5b-si-hf",
+  "vision_adapter": null,
+  "vision_checkpoint": "/nethome/tadhopavkar/Concept-aware-vision-encoder/checkpoints/best_finetuned_siglip.pt",
+  "use_qlora": false,
+  "dataset_id": "mteb/ARO-Visual-Relation",
+  "split": "test",
+  "spatial_relations": [
+    "above",
+    "behind",
+    "in",
+    "in front of",
+    "next to",
+    "on",
+    "to the left of",
+    "to the right of",
+    "under"
+  ],
+  "seed": 17,
+  "num_examples": 1188,
+  "micro_accuracy": 0.51010101010101,
+  "macro_relation_accuracy": 0.51010101010101,
+  "per_relation": {
+    "above": {
+      "correct": 76,
+      "total": 132,
+      "accuracy": 0.5757575757575758
+    },
+    "behind": {
+      "correct": 69,
+      "total": 132,
+      "accuracy": 0.5227272727272727
+    },
+    "in": {
+      "correct": 60,
+      "total": 132,
+      "accuracy": 0.45454545454545453
+    },
+    "in front of": {
+      "correct": 74,
+      "total": 132,
+      "accuracy": 0.5606060606060606
+    },
+    "next to": {
+      "correct": 59,
+      "total": 132,
+      "accuracy": 0.44696969696969696
+    },
+    "on": {
+      "correct": 70,
+      "total": 132,
+      "accuracy": 0.5303030303030303
+    },
+    "to the left of": {
+      "correct": 67,
+      "total": 132,
+      "accuracy": 0.5075757575757576
+    },
+    "to the right of": {
+      "correct": 70,
+      "total": 132,
+      "accuracy": 0.5303030303030303
+    },
+    "under": {
+      "correct": 61,
+      "total": 132,
+      "accuracy": 0.4621212121212121
+    }
+  }
+}

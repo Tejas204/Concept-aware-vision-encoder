@@ -1,0 +1,70 @@
+{
+  "model_id": "/scratch/common_models/llava-onevision-qwen2-0.5b-si-hf",
+  "vision_adapter": null,
+  "vision_checkpoint": null,
+  "use_qlora": false,
+  "dataset_id": "mteb/ARO-Visual-Relation",
+  "split": "test",
+  "spatial_relations": [
+    "above",
+    "behind",
+    "in",
+    "in front of",
+    "next to",
+    "on",
+    "to the left of",
+    "to the right of",
+    "under"
+  ],
+  "seed": 42,
+  "num_examples": 1188,
+  "micro_accuracy": 0.5673400673400674,
+  "macro_relation_accuracy": 0.5673400673400674,
+  "per_relation": {
+    "above": {
+      "correct": 76,
+      "total": 132,
+      "accuracy": 0.5757575757575758
+    },
+    "behind": {
+      "correct": 67,
+      "total": 132,
+      "accuracy": 0.5075757575757576
+    },
+    "in": {
+      "correct": 92,
+      "total": 132,
+      "accuracy": 0.696969696969697
+    },
+    "in front of": {
+      "correct": 68,
+      "total": 132,
+      "accuracy": 0.5151515151515151
+    },
+    "next to": {
+      "correct": 68,
+      "total": 132,
+      "accuracy": 0.5151515151515151
+    },
+    "on": {
+      "correct": 104,
+      "total": 132,
+      "accuracy": 0.7878787878787878
+    },
+    "to the left of": {
+      "correct": 62,
+      "total": 132,
+      "accuracy": 0.4696969696969697
+    },
+    "to the right of": {
+      "correct": 71,
+      "total": 132,
+      "accuracy": 0.5378787878787878
+    },
+    "under": {
+      "correct": 66,
+      "total": 132,
+      "accuracy": 0.5
+    }
+  }
+}
