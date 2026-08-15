@@ -17,7 +17,7 @@ if torch.cuda.is_available():
     print("CUDA:", torch.version.cuda)
 PY
 
-python evaluate_aro_llava.py --plot-examples
+python evaluate_aro_llava.py --plot-wrong-examples
 
 echo "=========================================="
 echo "Finished Running aro evaluation: $(date)"
