@@ -17,12 +17,7 @@ if torch.cuda.is_available():
     print("CUDA:", torch.version.cuda)
 PY
 
-python evaluate_aro_llava.py \
-  --model-id /scratch/common_models/llava-onevision-qwen2-7b-si-hf \
-  --output-dir /nethome/tadhopavkar/Concept-aware-vision-encoder/results/aro_baseline/llava-onevision-qwen2-7b-si-hf \
-  --generate-visualization \
-  --plot-output-dir /nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/aro_baseline/llava-onevision-qwen2-7b-si-hf \
-  --seeds 42 123 17
+python evaluate_aro_llava.py --plot-examples
 
 echo "=========================================="
 echo "Finished Running aro evaluation: $(date)"

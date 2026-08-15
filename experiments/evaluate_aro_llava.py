@@ -39,6 +39,13 @@ python evaluate_aro_llava.py \
   --vision-adapter checkpoints/best_finetuned_siglip_vision_adapter \
   --use-qlora
 
+python evaluate_aro_llava.py \
+  --model-id /scratch/common_models/llava-onevision-qwen2-7b-si-hf \
+  --output-dir /nethome/tadhopavkar/Concept-aware-vision-encoder/results/aro_baseline/llava-onevision-qwen2-7b-si-hf \
+  --generate-visualization \
+  --plot-output-dir /nethome/tadhopavkar/Concept-aware-vision-encoder/visualizations/aro_baseline/llava-onevision-qwen2-7b-si-hf \
+  --seeds 42 123 17
+
 The output directory receives predictions.jsonl and summary.json.  The latter
 contains micro accuracy, macro (per-relation) accuracy, and relation counts.
 """
@@ -77,6 +84,24 @@ DEFAULT_SPATIAL_RELATIONS = {
     "under",
 }
 
+BASELINE_PREDICTIONS_DIR = Path(
+    "/nethome/tadhopavkar/Concept-aware-vision-encoder/results/aro_baseline/"
+    "llava-onevision-qwen2-0.5b-si-hf/seed_17"
+)
+FINETUNING_PREDICTIONS_DIR = Path(
+    "/nethome/tadhopavkar/Concept-aware-vision-encoder/results/aro_finetuning/"
+    "llava-onevision-qwen2-0.5b-si-hf/"
+    "best_finetuned_siglip_concept_0.0/seed_17"
+)
+LORA_PREDICTIONS_DIR = Path(
+    "/nethome/tadhopavkar/Concept-aware-vision-encoder/results/aro_finetuning_lora/"
+    "llava-onevision-qwen2-0.5b-si-hf/"
+    "best_finetuned_siglip_lora_concept_0.0_vision_adapter/seed_17"
+)
+QUALITATIVE_RESULTS_DIR = Path(
+    "/nethome/tadhopavkar/Concept-aware-vision-encoder/results/qualitative_results"
+)
+
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -101,7 +126,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--seeds", type=int, nargs="+", default=[42])
     p.add_argument("--max-samples", type=int, default=None)
     p.add_argument("--output-dir", type=Path, default=Path("results/aro_llava"))
-    p.add_argument("--plot-examples", action="store_true")
+    p.add_argument(
+        "--plot-examples",
+        action="store_true",
+        help=(
+            "Only generate baseline-vs-finetuning qualitative comparisons from "
+            "the fixed seed-17 prediction files; do not load or evaluate a model."
+        ),
+    )
     p.add_argument("--generate-visualization", action=argparse.BooleanOptionalAction, default=False)
     p.add_argument("--plot-output-dir", type=Path, default=Path("visualizations/aro_examples"))
     p.add_argument("--device", choices=["auto", "cuda", "mps", "cpu"], default="auto")
@@ -235,36 +267,118 @@ def captions_of(row: dict[str, Any]) -> tuple[str, str]:
     return true_caption, false_caption
 
 
-def plot_prediction_examples(predictions_path: Path, ds: Dataset, output_dir: Path) -> None:
-    records = [json.loads(line) for line in predictions_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+def load_prediction_records(predictions_dir: Path) -> list[dict[str, Any]]:
+    predictions_path = predictions_dir / "predictions.jsonl"
+    if not predictions_path.is_file():
+        raise FileNotFoundError(f"{predictions_path} was not found.")
+    return [
+        json.loads(line)
+        for line in predictions_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def plot_prediction_examples(ds: Dataset, output_dir: Path) -> None:
+    """Plot examples fixed by full finetuning and by LoRA, relative to baseline."""
+    baseline_records = load_prediction_records(BASELINE_PREDICTIONS_DIR)
+    comparison_runs = {
+        "finetuning": load_prediction_records(FINETUNING_PREDICTIONS_DIR),
+        "finetuning_lora": load_prediction_records(LORA_PREDICTIONS_DIR),
+    }
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    for relation in sorted(DEFAULT_SPATIAL_RELATIONS):
-        relation_records = [record for record in records if normalize_relation(record["relation"]) == relation]
-        selected_records = [record for record in relation_records if record["correct"]][:2]
-        selected_records += [record for record in relation_records if not record["correct"]][:2]
-        figure, axes = plt.subplots(2, 2, figsize=(14, 12))
+    baseline_by_index = {record["index"]: record for record in baseline_records}
+    for run_name, candidate_records in comparison_runs.items():
+        candidate_by_index = {record["index"]: record for record in candidate_records}
+        run_output_dir = output_dir / run_name
+        run_output_dir.mkdir(parents=True, exist_ok=True)
 
-        for axis, record in zip(axes.flat, selected_records):
-            row = ds[record["index"]]
-            caption_a = record["true_caption"] if record["gold"] == "A" else record["false_caption"]
-            caption_b = record["false_caption"] if record["gold"] == "A" else record["true_caption"]
-            marker_a = "★ MODEL SELECTED " if record["prediction"] == "A" else ""
-            marker_b = "★ MODEL SELECTED " if record["prediction"] == "B" else ""
-            text = f"Gold caption: {textwrap.fill(record['true_caption'], 60)}\n\n{marker_a}A: {textwrap.fill(caption_a, 60)}\n{marker_b}B: {textwrap.fill(caption_b, 60)}"
-            axis.imshow(image_of(row))
-            axis.set_title(f"{'Correct' if record['correct'] else 'Wrong'} | Sample {record['index']}", color="green" if record["correct"] else "red", fontsize=13)
-            axis.text(0.5, -0.08, text, transform=axis.transAxes, ha="center", va="top", fontsize=10)
-            axis.axis("off")
+        for relation in sorted(DEFAULT_SPATIAL_RELATIONS):
+            selected: list[tuple[dict[str, Any], dict[str, Any]]] = []
+            for index, baseline in baseline_by_index.items():
+                candidate = candidate_by_index.get(index)
+                if candidate is None or normalize_relation(baseline["relation"]) != relation:
+                    continue
+                identity_fields = ("relation", "true_caption", "false_caption", "gold")
+                if any(baseline[field] != candidate[field] for field in identity_fields):
+                    raise ValueError(
+                        f"Prediction records do not describe the same sample at index {index}."
+                    )
+                if not baseline["correct"] and candidate["correct"]:
+                    selected.append((baseline, candidate))
+                if len(selected) == 2:
+                    break
 
-        for axis in axes.flat[len(selected_records):]:
-            axis.axis("off")
+            if len(selected) < 2:
+                raise ValueError(
+                    f"Expected 2 baseline-wrong/{run_name}-correct samples for "
+                    f"{relation!r}, but found {len(selected)}."
+                )
 
-        figure.suptitle(relation.title(), fontsize=16)
-        figure.subplots_adjust(hspace=0.65, wspace=0.15)
-        filename = relation.replace(" ", "_") + "_correct_and_wrong.png"
-        figure.savefig(output_dir / filename, dpi=180, bbox_inches="tight")
-        plt.close(figure)
+            figure, axes = plt.subplots(
+                len(selected), 2, figsize=(14, 6 * len(selected)), squeeze=False
+            )
+            for row_number, (baseline, candidate) in enumerate(selected):
+                labeled_records = (
+                    ("Baseline", baseline),
+                    (run_name.replace("_", " ").title(), candidate),
+                )
+                for column, (label, record) in enumerate(labeled_records):
+                    axis = axes[row_number, column]
+                    dataset_row = ds[record["index"]]
+                    dataset_captions = captions_of(dataset_row)
+                    if (
+                        relation_of(dataset_row) != relation
+                        or dataset_captions
+                        != (record["true_caption"], record["false_caption"])
+                    ):
+                        raise ValueError(
+                            "The seed-17 dataset reconstruction does not match "
+                            f"prediction index {record['index']}."
+                        )
+                    caption_a = (
+                        record["true_caption"]
+                        if record["gold"] == "A"
+                        else record["false_caption"]
+                    )
+                    caption_b = (
+                        record["false_caption"]
+                        if record["gold"] == "A"
+                        else record["true_caption"]
+                    )
+                    marker_a = "★ SELECTED " if record["prediction"] == "A" else ""
+                    marker_b = "★ SELECTED " if record["prediction"] == "B" else ""
+                    caption_text = (
+                        f"Gold caption: {textwrap.fill(record['true_caption'], 58)}\n\n"
+                        f"{marker_a}A: {textwrap.fill(caption_a, 58)}\n"
+                        f"{marker_b}B: {textwrap.fill(caption_b, 58)}"
+                    )
+                    axis.imshow(image_of(dataset_row))
+                    axis.set_title(
+                        f"{label}: {'Correct' if record['correct'] else 'Wrong'} | Sample {record['index']}",
+                        color="green" if record["correct"] else "red",
+                        fontsize=13,
+                    )
+                    axis.text(
+                        0.5,
+                        -0.08,
+                        caption_text,
+                        transform=axis.transAxes,
+                        ha="center",
+                        va="top",
+                        fontsize=10,
+                    )
+                    axis.axis("off")
+
+            figure.suptitle(
+                f"{relation.title()}: baseline errors corrected by "
+                f"{run_name.replace('_', ' ')}",
+                fontsize=16,
+            )
+            figure.subplots_adjust(hspace=0.65, wspace=0.15)
+            filename = relation.replace(" ", "_") + ".png"
+            figure.savefig(run_output_dir / filename, dpi=180, bbox_inches="tight")
+            plt.close(figure)
 
 
 def load_vision_adapter(model: LlavaOnevisionForConditionalGeneration, path: Path) -> None:
@@ -300,13 +414,10 @@ def main() -> None:
     args = parse_args()
 
     if args.plot_examples:
-        for seed in args.seeds:
-            random.seed(seed)
-            ds = prepare_dataset(args)
-            predictions_path = args.output_dir / f"seed_{seed}" / "predictions.jsonl"
-            if not predictions_path.is_file():
-                raise FileNotFoundError(f"{predictions_path} was not found.")
-            plot_prediction_examples(predictions_path, ds, args.plot_output_dir / f"seed_{seed}")
+        random.seed(17)
+        ds = prepare_dataset(args)
+        plot_prediction_examples(ds, QUALITATIVE_RESULTS_DIR)
+        print(f"Saved qualitative comparisons to {QUALITATIVE_RESULTS_DIR}")
         return
 
     if args.vision_checkpoint is not None and args.vision_adapter is not None:
@@ -428,7 +539,10 @@ def main() -> None:
         print(json.dumps(summary, indent=2, ensure_ascii=False))
         print(f"Saved {predictions_path} and {summary_path}")
         if args.generate_visualization:
-            plot_prediction_examples(predictions_path, ds, args.plot_output_dir / f"seed_{seed}")
+            print(
+                "--generate-visualization is deprecated; run this script with "
+                "--plot-examples after all three prediction files are available."
+            )
 
 
 if __name__ == "__main__":
